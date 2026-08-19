@@ -1,0 +1,7 @@
+.env
+browser_data/
+__pycache__/
+*.py[cod]
+
+# Working docs (not tracked)
+docs/

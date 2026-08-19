@@ -1,0 +1,20 @@
+# Browser data
+browser_data/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Git
+.gitignore
+
+# Environment files
+.env
+.env.example
+
+# Working docs (not tracked)
+docs/
+
+# GitLab CI (not needed in the image)
+.gitlab/

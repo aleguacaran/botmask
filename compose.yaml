@@ -1,0 +1,23 @@
+services:
+  app:
+    build:
+      context: .
+      target: develop
+      tags:
+        - tuqueque:develop
+    image: tuqueque:develop
+    container_name: tuqueque
+    stdin_open: true
+    tty: true
+    env_file: .env
+    working_dir: /app
+    ports:
+      - 9222:9223
+    volumes:
+      - .:/app
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - /run/user/1000/wayland-0:/tmp/wayland-0
+      - pip-cache:/root/.cache/pip
+
+volumes:
+  pip-cache:
