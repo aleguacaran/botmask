@@ -44,6 +44,11 @@ if [ "${need_virtual}" = "true" ]; then
     export DISPLAY=:99
     unset WAYLAND_DISPLAY
 
+    # PyAutoGUI (OS-level input) requires an Xauthority file to exist, even
+    # though Xvfb runs with -ac (no access control).
+    XAUTH="${XAUTHORITY:-$HOME/.Xauthority}"
+    [ -f "${XAUTH}" ] || touch "${XAUTH}"
+
     # Window manager → deterministic window placement (needed for OS-level input calibration)
     if command -v openbox >/dev/null 2>&1; then
         openbox &
