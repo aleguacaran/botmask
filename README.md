@@ -47,13 +47,13 @@ docker compose up -d --build
 
 Volumes: `.:/app`, `/tmp/.X11-unix`, `/run/user/<UID>/wayland-0`. CDP exposed at `:9222`.
 
-### Server (no monitor) — Xvfb + noVNC — `server` target
+### Server (no monitor) — Xvfb + noVNC — `deploy` target
 
 The server override lives in **`.gitlab/compose.yaml`**; a future GitLab CI step copies it
 to `compose.override.yaml` (which Docker Compose auto-loads), then:
 
 ```bash
-docker compose up -d --build   # target=server via the override
+docker compose up -d --build   # target=deploy via the override
 ```
 
 Runs Brave headful on an Xvfb virtual display; watch it at `http://<host>:6080` (noVNC) or
@@ -61,13 +61,15 @@ VNC at `:5900`. Same element→box→input logic — only the display source dif
 
 `start.sh` auto-detects the mode from the environment: with `DISPLAY`/`WAYLAND_DISPLAY`
 present it runs the browser directly; with none (or `VIRTUAL_DISPLAY=true`) it boots the
-Xvfb stack first.
+Xvfb stack first. On every start it also provisions Python packages + browser binaries at
+runtime (`pip install .` + `patchright install chromium`), cached in the `cache` volume
+(`/root/.cache` — pip wheels + browsers) so the image itself stays small.
 
 ## Status
 
 - **Phase 0 — Evaluation: COMPLETE** → `docs/decision.md`
 - **Phase 1 — Package extraction & container scaffold: IN PROGRESS**
-  - `config.py` migrated ✅ · Dockerfile (develop/server) + compose + start.sh scaffolded ✅
+  - `config.py` migrated ✅ · Dockerfile (develop/deploy) + compose + start.sh scaffolded ✅
   - Fitts + overshoot mouse port ⏳ · `human_behavior.py` migration ⏳ (see `TODO.md`)
 
 ## Docker targets (multistage)
@@ -75,7 +77,7 @@ Xvfb stack first.
 | Target | For | Display | Build |
 | --- | --- | --- | --- |
 | `develop` (default via compose.yaml) | local dev on host Wayland/X11 | host display | `docker build --target develop -t tuqueque:develop .` |
-| `server` (default target of plain `docker build`) | headless machine / CI | Xvfb + noVNC | `docker build --target server -t tuqueque:server .` |
+| `deploy` (default target of plain `docker build`) | headless machine / CI | Xvfb + noVNC | `docker build --target deploy -t tuqueque:deploy .` |
 
 Base image is Debian `python:slim` — Brave requires glibc and cannot run on Alpine/musl.
 
