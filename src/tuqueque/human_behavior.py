@@ -82,37 +82,82 @@ def _bezier_point(t: float, p0: float, p1: float, p2: float, p3: float) -> float
             t ** 3 * p3)
 
 
+def fitts(distance: float, width: float) -> float:
+    """Fitts's Law: expected movement time (MT) for a given distance/target width."""
+    a, b = 0, 2 / 3
+    return a + b * math.log2(distance / width + 1)
+
+
+def fitts_steps(length: float, width: float) -> int:
+    """Step count for a movement of `length` px to a target of `width` px.
+
+    Longer distances + smaller targets → more steps → slower approach.
+    """
+    mt = fitts(length, width)
+    return max(2, math.ceil((math.log2(mt + 1) + random.random() * 25) * 3))
+
+
+def overshoot(point: Tuple[float, float], radius: float = 120) -> Tuple[float, float]:
+    """Point slightly past `point` in a random direction (miss-and-re-adjust)."""
+    x, y = point
+    angle = random.uniform(-math.pi, math.pi)
+    return (x + radius * math.cos(angle), y + radius * math.sin(angle))
+
+
+def should_overshoot(start: Tuple[float, float], end: Tuple[float, float], threshold: float = 500) -> bool:
+    """Whether a long movement warrants an overshoot-and-correct path."""
+    return math.hypot(end[0] - start[0], end[1] - start[1]) > threshold
+
+
 def _generate_bezier_path(
     start: Tuple[float, float],
     end: Tuple[float, float],
     steps: int = 50,
-) -> List[Tuple[float, float]]:
+    spread: Optional[float] = None,
+) -> Tuple[List[Tuple[float, float]], float]:
+    """Generate a cubic Bezier path from start to end.
+
+    Control-point spread is clamped to 2–200 px (matches ghost-cursor) so long
+    movements don't curve unrealistically wide.
+
+    Returns:
+        (path points, curve length in px)
+    """
     sx, sy = start
     ex, ey = end
 
     dist = math.hypot(ex - sx, ey - sy)
+    if dist < 1:
+        return [(sx, sy)], 0.0
 
-    ctrl_offset = dist * random.uniform(0.2, 0.5)
+    if spread is None:
+        spread = max(2, min(200, dist))
+
     angle = math.atan2(ey - sy, ex - sx)
 
     perp_angle = angle + math.pi / 2
     if random.random() < 0.5:
         perp_angle = angle - math.pi / 2
 
-    cp1x = sx + (ex - sx) * random.uniform(0.2, 0.4) + math.cos(perp_angle) * ctrl_offset * random.uniform(0.3, 1.0)
-    cp1y = sy + (ey - sy) * random.uniform(0.2, 0.4) + math.sin(perp_angle) * ctrl_offset * random.uniform(0.3, 1.0)
+    cp1x = sx + (ex - sx) * random.uniform(0.2, 0.4) + math.cos(perp_angle) * spread * random.uniform(0.3, 1.0)
+    cp1y = sy + (ey - sy) * random.uniform(0.2, 0.4) + math.sin(perp_angle) * spread * random.uniform(0.3, 1.0)
 
-    cp2x = sx + (ex - sx) * random.uniform(0.6, 0.8) + math.cos(perp_angle) * ctrl_offset * random.uniform(0.1, 0.6)
-    cp2y = sy + (ey - sy) * random.uniform(0.6, 0.8) + math.sin(perp_angle) * ctrl_offset * random.uniform(0.1, 0.6)
+    cp2x = sx + (ex - sx) * random.uniform(0.6, 0.8) + math.cos(perp_angle) * spread * random.uniform(0.1, 0.6)
+    cp2y = sy + (ey - sy) * random.uniform(0.6, 0.8) + math.sin(perp_angle) * spread * random.uniform(0.1, 0.6)
 
     path = []
+    length = 0.0
+    prev = (sx, sy)
     for i in range(steps + 1):
         t = i / steps
         x = _bezier_point(t, sx, cp1x, cp2x, ex)
         y = _bezier_point(t, sy, cp1y, cp2y, ey)
         path.append((x, y))
+        if i > 0:
+            length += math.hypot(x - prev[0], y - prev[1])
+        prev = (x, y)
 
-    return path
+    return path, length
 
 
 class HumanBehavior:
@@ -312,25 +357,28 @@ class HumanBehavior:
         target_x: Optional[float] = None,
         target_y: Optional[float] = None,
         locator: Optional[Locator] = None,
-        steps: int = 50,
+        steps: Optional[int] = None,
     ):
         """
         Move mouse along a Bezier curve to a target position.
 
-        Uses cubic Bezier interpolation with random control points
-        to simulate natural mouse movement curves.
+        Step count is derived from Fitts's Law (distance + target width) unless
+        `steps` is given explicitly. Long movements (>500 px) overshoot the
+        target and trace a tight correction curve back (miss-and-re-adjust).
 
         Args:
             target_x: Target X coordinate (overrides locator)
             target_y: Target Y coordinate (overrides locator)
             locator: Playwright Locator to move to
-            steps: Number of interpolation steps
+            steps: Explicit step count (overrides Fitts's Law)
         """
+        target_width = 20.0
         if locator is not None:
             box = self._ensure_in_viewport(locator)
             if box:
-                target_x = box["x"] + box["width"] * random.uniform(0.2, 0.8)
-                target_y = box["y"] + box["height"] * random.uniform(0.2, 0.8)
+                target_width = max(box["width"], 1.0)
+                target_x = box["x"] + box["width"] * random.uniform(0, 1)
+                target_y = box["y"] + box["height"] * random.uniform(0, 1)
             else:
                 return
 
@@ -340,19 +388,55 @@ class HumanBehavior:
         target_x = max(0, min(target_x, self.viewport["width"]))
         target_y = max(0, min(target_y, self.viewport["height"]))
 
-        path = _generate_bezier_path(self._mouse_pos, (target_x, target_y), steps)
+        if steps is not None:
+            path, _ = _generate_bezier_path(self._mouse_pos, (target_x, target_y), steps=steps)
+            self._trace_path(path)
+            self._settle(target_x, target_y)
+        else:
+            self._move_mouse_human((target_x, target_y), target_width)
 
+    def _move_mouse_human(self, target: Tuple[float, float], target_width: float):
+        """Move with Fitts's Law pacing; overshoot-and-correct on long distances."""
+        start = self._mouse_pos
+        dist = math.hypot(target[0] - start[0], target[1] - start[1])
+        if dist < 1:
+            return
+
+        if should_overshoot(start, target, threshold=500):
+            over = overshoot(target, radius=120)
+            over = (
+                max(0, min(over[0], self.viewport["width"])),
+                max(0, min(over[1], self.viewport["height"])),
+            )
+            outbound, _ = _generate_bezier_path(start, over, steps=fitts_steps(dist, target_width))
+            self._trace_path(outbound)
+            correction, _ = _generate_bezier_path(
+                self._mouse_pos, target,
+                steps=max(8, fitts_steps(dist, target_width) // 2),
+            )
+            self._trace_path(correction)
+        else:
+            path, _ = _generate_bezier_path(start, target, steps=fitts_steps(dist, target_width))
+            self._trace_path(path)
+
+        self._settle(target[0], target[1])
+
+    def _trace_path(self, path: List[Tuple[float, float]]):
+        """Emit mouse moves with trapezoidal speed profile (slow ends, fast middle)."""
         for i, (x, y) in enumerate(path):
             self.page.mouse.move(x, y)
             self._mouse_pos = (x, y)
 
             if i < len(path) - 1:
-                delay = random.uniform(0.002, 0.015)
+                progress = i / max(len(path) - 1, 1)
+                speed_factor = 1.0 + abs(progress - 0.5) * 2
+                delay = random.uniform(0.002, 0.015) * speed_factor
                 if random.random() < 0.03:
                     delay += random.uniform(0.05, 0.15)
                 time.sleep(delay)
 
-        # Settling: micro-adjustments at target (humans don't land perfectly)
+    def _settle(self, target_x: float, target_y: float):
+        """Micro-adjustments at target (humans don't land perfectly)."""
         if random.random() < 0.4:
             settle_steps = random.randint(1, 3)
             for _ in range(settle_steps):
