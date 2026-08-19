@@ -5,7 +5,8 @@ Human Behavior CDP CLI — Human-like browser interactions via CDP.
 Connects to the shared Brave CDP instance for all browser interactions.
 Human-like commands (click, scroll, fill, hover, read, warm_up, navigate)
 use the HumanBehavior class. Inspection commands (snapshot, eval,
-list_pages, viewport) use direct CDP access.
+list_pages, viewport) use direct CDP access. AI targeting commands
+(a11y, a11y_click, os_click, input_calib) use the interaction-model modules.
 
 Usage:
     python -m tuqueque.human_cdp click       "h2#Enlaces_externos"
@@ -22,6 +23,10 @@ Usage:
     python -m tuqueque.human_cdp list_pages
     python -m tuqueque.human_cdp new_page    "https://example.com"
     python -m tuqueque.human_cdp screenshot  [--filePath /tmp/shot.png]
+    python -m tuqueque.human_cdp a11y        [--limit 300]
+    python -m tuqueque.human_cdp a11y_click 42
+    python -m tuqueque.human_cdp os_click    42
+    python -m tuqueque.human_cdp input_calib
 
 Output: JSON with {status, action, message, ...} for machine parsing.
 """
@@ -34,8 +39,10 @@ import time
 
 from patchright.sync_api import sync_playwright, Page
 
+from tuqueque.a11y import resolve_target, snapshot_interactives
 from tuqueque.config import get_cdp_url
 from tuqueque.human_behavior import HumanBehavior
+from tuqueque.input_os import calibrate, click_locator
 
 
 def _get_page() -> tuple:
@@ -309,6 +316,64 @@ def cmd_new_page(page: Page, args) -> dict:
     }
 
 
+def cmd_a11y(page: Page, args) -> dict:
+    """Numbered snapshot of interactive elements for AI targeting."""
+    items = snapshot_interactives(page, limit=args.limit)
+    visible = sum(1 for it in items if it["visible"])
+    return {
+        "status": "ok",
+        "action": "a11y",
+        "count": len(items),
+        "visible": visible,
+        "items": items,
+    }
+
+
+def _resolve_index(page: Page, index: int):
+    target = resolve_target(page, index)
+    if not target:
+        raise ValueError(f"Index {index} not resolvable (element gone or hidden)")
+    return target
+
+
+def cmd_a11y_click(page: Page, args) -> dict:
+    """Human CDP click on snapshot index (recommended path)."""
+    target = _resolve_index(page, args.index)
+    hb = HumanBehavior(page)
+    hb.human_click(target["locator"])
+    return {
+        "status": "ok",
+        "action": "a11y_click",
+        "index": args.index,
+        "box": target["box"],
+        "message": f"Clicked index {args.index}",
+    }
+
+
+def cmd_os_click(page: Page, args) -> dict:
+    """OS-level (PyAutoGUI) click on snapshot index (hard-target fallback)."""
+    target = _resolve_index(page, args.index)
+    click_locator(page, target["locator"])
+    return {
+        "status": "ok",
+        "action": "os_click",
+        "index": args.index,
+        "box": target["box"],
+        "message": f"OS-clicked index {args.index}",
+    }
+
+
+def cmd_input_calib(page: Page, args) -> dict:
+    """Print the viewport->screen offset for OS-level input calibration."""
+    off = calibrate(page)
+    return {
+        "status": "ok",
+        "action": "input_calib",
+        "offset": off,
+        "hint": "screen = viewport + offset (re-calibrate before each batch of clicks)",
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Human Behavior CDP CLI — human-like browser interactions",
@@ -378,6 +443,21 @@ def main():
     p_new = sub.add_parser("new_page", help="Open a new page")
     p_new.add_argument("url", nargs="?", default="about:blank", help="URL to open")
 
+    # a11y
+    p_a11y = sub.add_parser("a11y", help="Numbered interactive-element snapshot")
+    p_a11y.add_argument("--limit", type=int, default=300, help="Max entries")
+
+    # a11y_click
+    p_ac = sub.add_parser("a11y_click", help="Human CDP click on snapshot index")
+    p_ac.add_argument("index", type=int, help="Snapshot index to click")
+
+    # os_click
+    p_oc = sub.add_parser("os_click", help="OS-level (PyAutoGUI) click on snapshot index")
+    p_oc.add_argument("index", type=int, help="Snapshot index to click")
+
+    # input_calib
+    sub.add_parser("input_calib", help="Print viewport->screen offset")
+
     parsed = parser.parse_args()
 
     pw = None
@@ -400,6 +480,10 @@ def main():
             "list_pages": cmd_list_pages,
             "new_page": cmd_new_page,
             "set_input_files": cmd_set_input_files,
+            "a11y": cmd_a11y,
+            "a11y_click": cmd_a11y_click,
+            "os_click": cmd_os_click,
+            "input_calib": cmd_input_calib,
         }
 
         result = cmds[parsed.command](page, parsed)
