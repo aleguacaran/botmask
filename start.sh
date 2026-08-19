@@ -5,6 +5,14 @@ BROWSER="${BROWSER_EXECUTABLE_PATH:-/usr/bin/brave-browser}"
 DATA_DIR="${BROWSER_USER_DATA_DIR:-/app/browser_data}"
 CDP_PORT="${BRAVE_CDP_PORT:-9222}"
 
+# ── Python provisioning ─────────────────────────────────────────────────────
+# Packages + browser binaries install at runtime, cached in the `cache` volume
+# (/root/.cache: pip wheels + ms-playwright browsers) so the image stays small.
+echo "Provisioning Python packages and browser binaries..."
+pip install --upgrade pip
+pip install .
+patchright install chromium
+
 # ── Display mode detection ──────────────────────────────────────────────────
 # The container picks a mode from its environment, so one entrypoint serves
 # both the local and server images:

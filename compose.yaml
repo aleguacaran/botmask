@@ -17,7 +17,7 @@ services:
       - .:/app
       - /tmp/.X11-unix:/tmp/.X11-unix
       - /run/user/1000/wayland-0:/tmp/wayland-0
-      - pip-cache:/root/.cache/pip
+      - cache:/root/.cache
 
 volumes:
-  pip-cache:
+  cache:

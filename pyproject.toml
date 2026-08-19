@@ -5,7 +5,6 @@ description = "Containerized human-behavior browser automation toolkit (Brave + 
 requires-python = ">=3.10"
 dependencies = [
     "patchright",
-    "playwright",
     "python-dotenv",
     "browserforge",
     "PyAutoGUI",
