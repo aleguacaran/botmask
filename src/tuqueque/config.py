@@ -17,6 +17,7 @@ import sys
 import random
 import shlex
 from pathlib import Path
+from typing import Optional
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -183,9 +184,37 @@ def get_rotated_viewport() -> dict:
     return random.choice(VIEWPORT_POOL)
 
 
+def get_browserforge_headers() -> Optional[dict]:
+    """Generate a coherent HTTP header set (UA + sec-ch-ua + Sec-Fetch-*) via BrowserForge.
+
+    Fallback: returns None when BrowserForge is unavailable or generation fails,
+    so the static pools below remain the fallback.
+
+    Returns:
+        dict of HTTP headers, or None
+    """
+    try:
+        from browserforge.headers import HeaderGenerator
+    except ImportError as e:
+        print(f"Warning: BrowserForge not available, using static pools: {e}", file=sys.stderr)
+        return None
+    try:
+        locale = get_env("BROWSER_LOCALE", "es-VE")
+        hg = HeaderGenerator(browser=["chrome"], os=["linux"], locale=[locale])
+        return dict(hg.generate())
+    except Exception as e:
+        print(f"Warning: BrowserForge header generation failed, using static pools: {e}", file=sys.stderr)
+        return None
+
+
 def get_context_options(persistent: bool = False, extra_headers: dict = None) -> dict:
     """
     Get context options for Playwright browser context.
+
+    HTTP headers and User-Agent come from a coherent BrowserForge set
+    (matching sec-ch-ua / Accept-Language / Sec-Fetch-*), falling back to the
+    static pools when unavailable. .env overrides (BROWSER_USER_AGENT,
+    BROWSER_VIEWPORT) always win.
 
     Args:
         persistent: Whether to use persistent context
@@ -195,22 +224,32 @@ def get_context_options(persistent: bool = False, extra_headers: dict = None) ->
         Dictionary with context options
     """
     config = get_browser_config()
+    headers = get_browserforge_headers()
+
+    # User-Agent precedence: .env > BrowserForge coherent UA > static pool
+    env_ua = get_env("BROWSER_USER_AGENT", "")
+    if env_ua:
+        user_agent = env_ua
+    elif headers and headers.get("User-Agent"):
+        user_agent = headers["User-Agent"]
+    else:
+        user_agent = get_rotated_user_agent()
+
+    http_headers = dict(headers) if headers else {}
+    http_headers.setdefault("Accept-Language", f"{config['locale']},es;q=0.9,en;q=0.8")
+    http_headers.setdefault("Referer", "https://www.google.com/")
+
+    # Add extra headers if provided
+    if extra_headers:
+        http_headers.update(extra_headers)
 
     options = {
         "locale": config["locale"],
         "timezone_id": config["timezone"],
         "viewport": get_rotated_viewport(),
-        "user_agent": get_rotated_user_agent(),
-        "extra_http_headers": {
-            "Accept-Language": f"{config['locale']},es;q=0.9,en;q=0.8",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            "Referer": "https://www.google.com/",
-        },
+        "user_agent": user_agent,
+        "extra_http_headers": http_headers,
     }
-
-    # Add extra headers if provided
-    if extra_headers:
-        options["extra_http_headers"].update(extra_headers)
 
     # Add geolocation if coordinates are provided
     if config["latitude"] and config["longitude"]:
@@ -259,6 +298,7 @@ __all__ = [
     "get_cdp_url",
     "get_rotated_user_agent",
     "get_rotated_viewport",
+    "get_browserforge_headers",
     "USER_AGENT_POOL",
     "VIEWPORT_POOL",
 ]

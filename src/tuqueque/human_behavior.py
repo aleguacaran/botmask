@@ -171,7 +171,10 @@ class HumanBehavior:
 
     def __init__(self, page: Page, viewport: Optional[dict] = None):
         self.page = page
-        self.viewport = viewport or {"width": 1920, "height": 1080}
+        if viewport is None:
+            vs = getattr(page, "viewport_size", None)
+            viewport = vs or {"width": 1920, "height": 1080}
+        self.viewport = viewport
         self._mouse_pos: Tuple[float, float] = (
             random.uniform(100, self.viewport["width"] - 100),
             random.uniform(100, self.viewport["height"] - 100),
