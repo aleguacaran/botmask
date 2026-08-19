@@ -23,8 +23,61 @@ from typing import Dict, Tuple
 from patchright.sync_api import Locator, Page
 
 
+def _window_geometry() -> Dict:
+    """Get the top-level browser window geometry from the X server (xdotool).
+
+    Returns the largest visible Brave window: {"x", "y", "w", "h"} in screen
+    pixels, or an empty dict when xdotool is unavailable / no window found.
+    """
+    import subprocess
+
+    try:
+        out = subprocess.run(
+            ["xdotool", "search", "--onlyvisible", "--class", "brave"],
+            capture_output=True, text=True, timeout=5,
+        )
+    except Exception:
+        return {}
+    best = {}
+    for wid in out.stdout.split():
+        try:
+            g = subprocess.run(
+                ["xdotool", "getwindowgeometry", "--shell", wid],
+                capture_output=True, text=True, timeout=5,
+            ).stdout
+        except Exception:
+            continue
+        kv = {}
+        for line in g.splitlines():
+            if "=" in line:
+                k, v = line.split("=", 1)
+                try:
+                    kv[k] = int(v)
+                except ValueError:
+                    pass
+        area = kv.get("WIDTH", 0) * kv.get("HEIGHT", 0)
+        if area > best.get("w", 0) * best.get("h", 0):
+            best = {"x": kv.get("X", 0), "y": kv.get("Y", 0), "w": kv.get("WIDTH", 0), "h": kv.get("HEIGHT", 0)}
+    return best
+
+
 def calibrate(page: Page) -> Dict:
-    """Compute the viewport->screen offset for the current window position."""
+    """Compute the viewport->screen offset for the current window position.
+
+    screen = window_origin + (window_size - content_size) + viewport_point
+
+    The X window can be larger than the content (openbox frame/chrome), so the
+    content origin inside the window is derived from the X window geometry
+    (xdotool) minus the JS inner size. Falls back to window.screenX/screenY +
+    browser chrome when xdotool is unavailable.
+    """
+    win = _window_geometry()
+    if win:
+        inner = page.evaluate("() => ({w: innerWidth, h: innerHeight})")
+        return {
+            "x": win["x"] + (win["w"] - inner["w"]),
+            "y": win["y"] + (win["h"] - inner["h"]),
+        }
     return page.evaluate(
         """() => ({
             x: window.screenX,
