@@ -16,6 +16,7 @@ import os
 import sys
 import random
 import shlex
+import tomllib  # stdlib (Python 3.11+); falls back gracefully
 from pathlib import Path
 from typing import Optional
 from dotenv import load_dotenv
@@ -28,37 +29,166 @@ def get_env(key: str, default=None):
     return os.getenv(key, default)
 
 
+def _find_toml() -> dict:
+    """Look for a tuqueque.toml config file.
+
+    Search order:
+    1. ``TUQUEQUE_CONFIG`` env var (absolute path)
+    2. ``tuqueque.toml`` in the current working directory
+    3. ``~/.config/tuqueque/tuqueque.toml``
+    Returns an empty dict if none is found.
+    """
+    # 1. explicit path
+    explicit = os.getenv("TUQUEQUE_CONFIG")
+    if explicit and Path(explicit).is_file():
+        with open(explicit, "rb") as f:
+            return tomllib.load(f)
+
+    # 2. cwd
+    cwd = Path("tuqueque.toml")
+    if cwd.is_file():
+        with open(cwd, "rb") as f:
+            return tomllib.load(f)
+
+    # 3. XDG config dir
+    xdg = Path(os.getenv("XDG_CONFIG_HOME", Path.home() / ".config")) / "tuqueque" / "tuqueque.toml"
+    if xdg.is_file():
+        with open(xdg, "rb") as f:
+            return tomllib.load(f)
+
+    return {}
+
+
+def _env_overrides() -> dict:
+    """Read ``TUQUEQUE_*`` env vars and map them into config keys.
+
+    This namespace is **isolated** from the host's generic ``BROWSER_*`` /
+    ``DISPLAY`` etc., so embedding tuqueque in another project never collides.
+
+    Supported mappings (env key → config dict key):
+        TUQUEQUE_HEADLESS      → config["headless"]
+        TUQUEQUE_LOCALE        → config["locale"]
+        TUQUEQUE_TIMEZONE      → config["timezone"]
+        TUQUEQUE_NAVIGATION_TIMEOUT   → config["navigation_timeout"]
+        TUQUEQUE_IMPLICIT_WAIT        → config["implicit_wait"]
+        TUQUEQUE_DELAY_MIN     → config["human_delay_min"]
+        TUQUEQUE_DELAY_MAX     → config["human_delay_max"]
+    """
+    overrides = {}
+    mapping = {
+        "HEADLESS": "headless",
+        "LOCALE": "locale",
+        "TIMEZONE": "timezone",
+        "NAVIGATION_TIMEOUT": "navigation_timeout",
+        "IMPLICIT_WAIT": "implicit_wait",
+        "DELAY_MIN": "human_delay_min",
+        "DELAY_MAX": "human_delay_max",
+    }
+    for env_key, cfg_key in mapping.items():
+        val = os.getenv("TUQUEQUE_%s" % env_key)
+        if val is not None:
+            # Convert booleans / ints / floats where sensible
+            if cfg_key == "headless":
+                overrides[cfg_key] = val.lower() in ("true", "1", "yes")
+            elif cfg_key in ("navigation_timeout", "implicit_wait"):
+                try:
+                    overrides[cfg_key] = int(val)
+                except ValueError:
+                    pass
+            elif cfg_key in ("human_delay_min", "human_delay_max"):
+                try:
+                    overrides[cfg_key] = float(val)
+                except ValueError:
+                    pass
+            else:
+                overrides[cfg_key] = val
+    return overrides
+
+
 def get_browser_config() -> dict:
     """
-    Get browser configuration from .env.
+    Get browser configuration, with the following precedence (highest first):
+
+    1. ``TUQUEQUE_*`` environment variables (isolated namespace – no collision
+       with the host project's env vars).
+    2. ``tuqueque.toml`` config file ( discovered via ``TUQUEQUE_CONFIG``,
+       ``./tuqueque.toml``, or ``~/.config/tuqueque/tuqueque.toml``).
+    3. Legacy bare env vars (``BROWSER_*``, ``DISPLAY``, etc.) – only used
+       when the above sources do not provide a value, so that the Docker
+       ``.env`` / compose workflow still works unchanged.
 
     Returns:
-        Dictionary with all browser configuration options
+        Dictionary with all browser configuration options.
     """
-    return {
+
+    # ---------- 1. built‑in defaults ----------
+    defaults = {
         # Browser paths
-        "user_data_dir": get_env("BROWSER_USER_DATA_DIR", "/app/browser_data"),
-        "executable_path": get_env("BROWSER_EXECUTABLE_PATH", "/usr/bin/brave-browser"),
+        "user_data_dir": "/app/browser_data",
+        "executable_path": "/usr/bin/brave-browser",
 
         # Display and headless
-        "headless": get_env("BROWSER_HEADLESS", "false").lower() == "true",
-        "display": get_env("DISPLAY"),
-        "wayland_display": get_env("WAYLAND_DISPLAY"),
+        "headless": False,
+        "display": None,
+        "wayland_display": None,
 
         # Profile and geolocation
-        "locale": get_env("BROWSER_LOCALE", "es-VE"),
-        "timezone": get_env("BROWSER_TIMEZONE", "America/Caracas"),
-        "latitude": float(get_env("BROWSER_LATITUDE", "10.4806")),
-        "longitude": float(get_env("BROWSER_LONGITUDE", "-66.9036")),
+        "locale": "es-VE",
+        "timezone": "America/Caracas",
+        "latitude": 10.4806,
+        "longitude": -66.9036,
 
         # Timeouts
-        "navigation_timeout": int(get_env("BROWSER_NAVIGATION_TIMEOUT", "30")),
-        "implicit_wait": int(get_env("BROWSER_IMPLICIT_WAIT", "10")),
+        "navigation_timeout": 30,
+        "implicit_wait": 10,
 
         # Human delays
-        "human_delay_min": float(get_env("HUMAN_DELAY_MIN", "1.0")),
-        "human_delay_max": float(get_env("HUMAN_DELAY_MAX", "3.0")),
+        "human_delay_min": 1.0,
+        "human_delay_max": 3.0,
     }
+
+    # ---------- 2. TUQUEQUE_* env overrides (namespace‑safe) ----------
+    overrides = _env_overrides()
+
+    # ---------- 3. TOML config file ----------
+    toml = _find_toml()
+
+    # ---------- 4. Merge: TUQUEQUE > TOML > defaults, then legacy fallback ----------
+    merged = dict(defaults)          # start with defaults
+    merged.update(toml)            # TOML overrides defaults
+    merged.update(overrides)       # TUQUEQUE_* overrides TOML & defaults
+
+    # Legacy bare env vars as final fallback (only when new sources omit a key)
+    legacy = {
+        "user_data_dir": get_env("BROWSER_USER_DATA_DIR"),
+        "executable_path": get_env("BROWSER_EXECUTABLE_PATH"),
+        "headless": get_env("BROWSER_HEADLESS", "").lower() == "true",
+        "display": get_env("DISPLAY"),
+        "wayland_display": get_env("WAYLAND_DISPLAY"),
+        "locale": get_env("BROWSER_LOCALE"),
+        "timezone": get_env("BROWSER_TIMEZONE"),
+        "latitude": float(get_env("BROWSER_LATITUDE", "10.4806"))
+        if get_env("BROWSER_LATITUDE") else 10.4806,
+        "longitude": float(get_env("BROWSER_LONGITUDE", "-66.9036"))
+        if get_env("BROWSER_LONGITUDE") else -66.9036,
+        "navigation_timeout": int(get_env("BROWSER_NAVIGATION_TIMEOUT", "30"))
+        if get_env("BROWSER_NAVIGATION_TIMEOUT")
+        else 30,
+        "implicit_wait": int(get_env("BROWSER_IMPLICIT_WAIT", "10"))
+        if get_env("BROWSER_IMPLICIT_WAIT")
+        else 10,
+        "human_delay_min": float(get_env("HUMAN_DELAY_MIN", "1.0"))
+        if get_env("HUMAN_DELAY_MIN")
+        else 1.0,
+        "human_delay_max": float(get_env("HUMAN_DELAY_MAX", "3.0"))
+        if get_env("HUMAN_DELAY_MAX")
+        else 3.0,
+    }
+    for k, v in legacy.items():
+        if merged.get(k) is None:  # only fill if not already set by higher priority
+            merged[k] = v
+
+    return merged
 
 
 def get_browser_args() -> list:
@@ -116,8 +246,14 @@ def get_launch_options(persistent: bool = False) -> dict:
     """
     Get launch options for Playwright browser.
 
-    CRITICAL: BROWSER_HEADLESS from .env takes absolute precedence.
-    Only auto-detect if BROWSER_HEADLESS is not set.
+    Uses the merged configuration from :func:`get_browser_config`, so the
+    priority order is:
+
+    1. ``TUQUEQUE_*`` environment variables (namespace‑safe, no collision with
+       the host project's env vars).
+    2. ``tuqueque.toml`` config file.
+    3. Legacy bare env vars (``BROWSER_*``, ``DISPLAY``, etc.) – only used
+       when the above sources do not provide a value.
 
     Args:
         persistent: Whether to use persistent context (for login-required sites)
@@ -127,22 +263,17 @@ def get_launch_options(persistent: bool = False) -> dict:
     """
     config = get_browser_config()
 
-    # PRIORITY: 1) BROWSER_HEADLESS from .env, 2) auto-detect from display availability
-    env_headless = get_env("BROWSER_HEADLESS", "").lower()
+    # Headless from the merged config (TUQUEQUE_* > TOML > defaults > legacy)
+    headless = config["headless"]
 
-    if env_headless in ("true", "false"):
-        # .env takes absolute precedence - never override this
-        headless = env_headless == "true"
-    else:
-        # Auto-detect only if BROWSER_HEADLESS not explicitly set
-        display_available = config["display"] or config["wayland_display"]
-        headless = not display_available
-        print(f"⚠️  Warning: BROWSER_HEADLESS not set in .env, auto-detected headless={headless}", file=sys.stderr)
+    # Browser args: prefer those from the config file / TUQUEQUE_* env,
+    # otherwise fall back to reading ``BROWSER_ARGS`` env var.
+    args = config.get("browser", {}).get("args") or get_browser_args()
 
     return {
         "executable_path": config["executable_path"],
         "headless": headless,
-        "args": get_browser_args(),
+        "args": args,
         "ignore_default_args": ["--enable-automation"],
     }
 
