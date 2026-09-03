@@ -1,18 +1,35 @@
-# tuqueque configuration file (example)
-# Copy this to tuqueque.toml in your project and customize values
+# tuqueque configuration file (example - copy to tuqueque.toml for customization)
+# This file is NOT tracked by git (see .gitignore)
 
 [browser]
 # Path to the Brave executable
 executable = "/usr/bin/brave-browser"
 
 # Directory for user data (profile, cookies, cache)
-user_data_dir = "./browser_data"
+user_data_dir = "/app/browser_data"
 
 # Run browser in headless mode (no GUI)
 headless = false
 
 # Additional Chromium/Brave arguments (list)
-args = []
+# Default anti-detection args (always included unless overridden):
+args = [
+    "--disable-blink-features=AutomationControlled",
+    "--disable-dev-shm-usage",
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-infobars",
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--password-store=basic",
+    "--use-mock-keychain",
+    "--disable-features=IsolateOrigins,site-per-process",
+    "--disable-ipc-flooding-protection",
+    "--disable-renderer-backgrounding",
+    "--disable-backgrounding-occluded-windows",
+    "--disable-background-timer-throttling",
+    "--window-size=1920,1080",
+]
 
 # Navigation timeout (seconds)
 navigation_timeout = 30
