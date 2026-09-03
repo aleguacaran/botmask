@@ -1,7 +1,5 @@
-# tuqueque configuration file
-# This file centralizes plugin behavior settings.
-# Override individual values with TUQUEQUE_* environment variables
-# (e.g., TUQUEQUE_HEADLESS=true) without touching the host's env vars.
+# tuqueque configuration file (example)
+# Copy this to tuqueque.toml in your project and customize values
 
 [browser]
 # Path to the Brave executable
@@ -14,8 +12,6 @@ user_data_dir = "./browser_data"
 headless = false
 
 # Additional Chromium/Brave arguments (list)
-# These are appended to the default anti-detection args.
-# Example: ["--disable-features=IsolateOrigins,site-per-process"]
 args = []
 
 # Navigation timeout (seconds)
@@ -41,7 +37,6 @@ locale = "es-VE"
 timezone = "America/Caracas"
 
 # Geolocation coordinates (decimal degrees)
-# If both are set, the "geolocation" permission will be added to context options
 latitude = 10.4806
 longitude = -66.9036
 
