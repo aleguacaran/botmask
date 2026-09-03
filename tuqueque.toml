@@ -1,0 +1,52 @@
+# tuqueque configuration file
+# This file centralizes plugin behavior settings.
+# Override individual values with TUQUEQUE_* environment variables
+# (e.g., TUQUEQUE_HEADLESS=true) without touching the host's env vars.
+
+[browser]
+# Path to the Brave executable
+executable = "/usr/bin/brave-browser"
+
+# Directory for user data (profile, cookies, cache)
+user_data_dir = "./browser_data"
+
+# Run browser in headless mode (no GUI)
+headless = false
+
+# Additional Chromium/Brave arguments (list)
+# These are appended to the default anti-detection args.
+# Example: ["--disable-features=IsolateOrigins,site-per-process"]
+args = []
+
+# Navigation timeout (seconds)
+navigation_timeout = 30
+
+# Implicit wait (seconds)
+implicit_wait = 10
+
+# Human-like delay between actions (seconds)
+human_delay_min = 3.0
+human_delay_max = 8.0
+
+# CDP connection settings
+[cdp]
+host = "127.0.0.1"
+port = 9222
+
+[profile]
+# Browser locale/language
+locale = "es-VE"
+
+# Timezone string
+timezone = "America/Caracas"
+
+# Geolocation coordinates (decimal degrees)
+# If both are set, the "geolocation" permission will be added to context options
+latitude = 10.4806
+longitude = -66.9036
+
+# Human behavior parameters
+[behavior]
+# Human delay ranges (seconds)
+delay_min = 3.0
+delay_max = 8.0

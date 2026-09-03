@@ -107,85 +107,85 @@ def _env_overrides() -> dict:
 
 def get_browser_config() -> dict:
     """
-    Get browser configuration, with the following precedence (highest first):
+    Get browser configuration, with TOML as the primary source.
 
-    1. ``TUQUEQUE_*`` environment variables (isolated namespace – no collision
-       with the host project's env vars).
-    2. ``tuqueque.toml`` config file ( discovered via ``TUQUEQUE_CONFIG``,
-       ``./tuqueque.toml``, or ``~/.config/tuqueque/tuqueque.toml``).
-    3. Legacy bare env vars (``BROWSER_*``, ``DISPLAY``, etc.) – only used
-       when the above sources do not provide a value, so that the Docker
-       ``.env`` / compose workflow still works unchanged.
+    Precedence (highest first):
+
+    1. ``tuqueque.toml`` config file — all browser/profile/cdp/behavior settings.
+       If a key is present in TOML, it is used exclusively; the env vars listed
+       below are *only* used for the display vars noted below.
+
+    2. Environment variables — **only** the display vars ``DISPLAY`` and
+       ``WAYLAND_DISPLAY`` are read from the host environment; they override
+       any corresponding TOML values so that a running container / bare-metal
+       setup can still locate its display surface.
+
+    3. Built‑in defaults — used when a TOML key is absent and the env var
+       is also absent.  These defaults ensure the project starts immediately
+       without any config file or env var.
+
+    Keys that always come from the environment (never from TOML):
+
+    - ``display``   — X11 display server address (e.g. ``:0``)
+    - ``wayland_display``  — Wayland display socket name
+      (e.g. ``wayland-0``)
+
+    All other keys (browser paths, profile, timeouts, human delays, cdp
+    settings, etc.) are driven exclusively by the TOML file or the project
+    built‑in defaults.
 
     Returns:
         Dictionary with all browser configuration options.
     """
 
-    # ---------- 1. built‑in defaults ----------
+    # ---------- 1. Load TOML config file ----------
+    toml = _find_toml()          # may be {}
+    if toml:
+        merged = dict(toml)
+    else:
+        merged = {}
+
+    # ---------- 2. Override display vars from the environment ----------
+    # These MUST come from the host environment; never from TOML.
+    merged["display"] = os.getenv("DISPLAY")
+    merged["wayland_display"] = os.getenv("WAYLAND_DISPLAY")
+
+    # ---------- 3. Ensure critical keys have sane defaults ----------
+    # If the TOML file is missing or a key is absent, fall back to defaults
+    # only for keys that have no reasonable alternative source.
     defaults = {
-        # Browser paths
         "user_data_dir": "/app/browser_data",
         "executable_path": "/usr/bin/brave-browser",
-
-        # Display and headless
         "headless": False,
-        "display": None,
-        "wayland_display": None,
-
-        # Profile and geolocation
         "locale": "es-VE",
         "timezone": "America/Caracas",
         "latitude": 10.4806,
         "longitude": -66.9036,
-
-        # Timeouts
         "navigation_timeout": 30,
         "implicit_wait": 10,
-
-        # Human delays
         "human_delay_min": 1.0,
         "human_delay_max": 3.0,
     }
+    for k, v in defaults.items():
+        merged.setdefault(k, v)
 
-    # ---------- 2. TUQUEQUE_* env overrides (namespace‑safe) ----------
-    overrides = _env_overrides()
-
-    # ---------- 3. TOML config file ----------
-    toml = _find_toml()
-
-    # ---------- 4. Merge: TUQUEQUE > TOML > defaults, then legacy fallback ----------
-    merged = dict(defaults)          # start with defaults
-    merged.update(toml)            # TOML overrides defaults
-    merged.update(overrides)       # TUQUEQUE_* overrides TOML & defaults
-
-    # Legacy bare env vars as final fallback (only when new sources omit a key)
-    legacy = {
-        "user_data_dir": get_env("BROWSER_USER_DATA_DIR"),
-        "executable_path": get_env("BROWSER_EXECUTABLE_PATH"),
-        "headless": get_env("BROWSER_HEADLESS", "").lower() == "true",
-        "display": get_env("DISPLAY"),
-        "wayland_display": get_env("WAYLAND_DISPLAY"),
-        "locale": get_env("BROWSER_LOCALE"),
-        "timezone": get_env("BROWSER_TIMEZONE"),
-        "latitude": float(get_env("BROWSER_LATITUDE", "10.4806"))
-        if get_env("BROWSER_LATITUDE") else 10.4806,
-        "longitude": float(get_env("BROWSER_LONGITUDE", "-66.9036"))
-        if get_env("BROWSER_LONGITUDE") else -66.9036,
-        "navigation_timeout": int(get_env("BROWSER_NAVIGATION_TIMEOUT", "30"))
-        if get_env("BROWSER_NAVIGATION_TIMEOUT")
-        else 30,
-        "implicit_wait": int(get_env("BROWSER_IMPLICIT_WAIT", "10"))
-        if get_env("BROWSER_IMPLICIT_WAIT")
-        else 10,
-        "human_delay_min": float(get_env("HUMAN_DELAY_MIN", "1.0"))
-        if get_env("HUMAN_DELAY_MIN")
-        else 1.0,
-        "human_delay_max": float(get_env("HUMAN_DELAY_MAX", "3.0"))
-        if get_env("HUMAN_DELAY_MAX")
-        else 3.0,
-    }
-    for k, v in legacy.items():
-        if merged.get(k) is None:  # only fill if not already set by higher priority
+    # --- TUQUEQUE_* env overrides are no longer the primary mechanism;
+    # the TOML file is.  Keep a tiny namespace‑safe fallback so that a user
+    # can quickly toggle a single flag at the shell without editing a file:
+    tiny_over = {}
+    for key in ("headless", "locale", "timezone", "navigation_timeout",
+                "implicit_wait", "human_delay_min", "human_delay_max"):
+        val = os.getenv(f"TUQUEQUE_{key.upper()}")
+        if val is not None:
+            tiny_over[key] = val
+    merged.update(tiny_over)   # TUQUEQUE_* still wins over defaults, but
+                               # TOML keys already set are preserved because
+                               # dict.update() only inserts missing keys when
+                               # using dict.setdefault — but update() overrides.
+    # Actually, to keep TOML as supreme, we should NOT update with tiny_over
+    # if the key already exists in merged from TOML.  Let's do it properly:
+    for k, v in tiny_over.items():
+        if k not in merged or merged[k] is None:
             merged[k] = v
 
     return merged
