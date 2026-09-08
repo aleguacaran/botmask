@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-tuqueque bootstrap script — bridges config → browser launch → CDP relay.
+botmask bootstrap script — bridges config → browser launch → CDP relay.
 """
 import sys
 import os
@@ -15,4 +15,4 @@ import sys
 import time
 from pathlib import Path
 
-from tuqueque.config import get_browser_config, get_browser_args, get_launch_options
+from botmask.config import get_browser_config, get_browser_args, get_launch_options

@@ -13,7 +13,7 @@ once after launch and reuse. Re-derive the offset before every batch of clicks
 (the window can drift).
 
 Usage:
-    from tuqueque.input_os import calibrate, click_at, click_locator
+    from botmask.input_os import calibrate, click_at, click_locator
 
     click_locator(page, locator)
 """

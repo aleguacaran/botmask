@@ -3,8 +3,8 @@ services:
     build:
       target: deploy
       tags:
-        - tuqueque:deploy
-    image: tuqueque:deploy
+        - botmask:deploy
+    image: botmask:deploy
     environment:
       VIRTUAL_DISPLAY: "true"
       BROWSER_ARGS: "--ignore-gpu-blocklist --disable-blink-features=AutomationControlled --disable-dev-shm-usage --no-sandbox --disable-setuid-sandbox --disable-features=IsolateOrigins,site-per-process --disable-site-isolation-trials"

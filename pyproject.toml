@@ -1,5 +1,5 @@
 [project]
-name = "tuqueque"
+name = "botmask"
 version = "0.1.0"
 description = "Containerized human-behavior browser automation toolkit (Brave + Patchright)"
 requires-python = ">=3.10"

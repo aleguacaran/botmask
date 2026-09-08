@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Browser Configuration Module - tuqueque
+Browser Configuration Module - botmask
 
 Centralized browser configuration for the humanized browser automation toolkit.
 All browser options are sourced from .env file (inherited from the jobs project).
 
 Usage:
-    from tuqueque.config import get_browser_config, get_launch_options
+    from botmask.config import get_browser_config, get_launch_options
 
     config = get_browser_config()
     launch_options = get_launch_options()
@@ -30,28 +30,28 @@ def get_env(key: str, default=None):
 
 
 def _find_toml() -> dict:
-    """Look for a tuqueque.toml config file.
+    """Look for a botmask.toml config file.
 
     Search order:
-    1. ``TUQUEQUE_CONFIG`` env var (absolute path)
-    2. ``tuqueque.toml`` in the current working directory
-    3. ``~/.config/tuqueque/tuqueque.toml``
+    1. ``BOTMASK_CONFIG`` env var (absolute path)
+    2. ``botmask.toml`` in the current working directory
+    3. ``~/.config/botmask/botmask.toml``
     Returns an empty dict if none is found.
     """
     # 1. explicit path
-    explicit = os.getenv("TUQUEQUE_CONFIG")
+    explicit = os.getenv("BOTMASK_CONFIG")
     if explicit and Path(explicit).is_file():
         with open(explicit, "rb") as f:
             return tomllib.load(f)
 
     # 2. cwd
-    cwd = Path("tuqueque.toml")
+    cwd = Path("botmask.toml")
     if cwd.is_file():
         with open(cwd, "rb") as f:
             return tomllib.load(f)
 
     # 3. XDG config dir
-    xdg = Path(os.getenv("XDG_CONFIG_HOME", Path.home() / ".config")) / "tuqueque" / "tuqueque.toml"
+    xdg = Path(os.getenv("XDG_CONFIG_HOME", Path.home() / ".config")) / "botmask" / "botmask.toml"
     if xdg.is_file():
         with open(xdg, "rb") as f:
             return tomllib.load(f)
@@ -60,19 +60,19 @@ def _find_toml() -> dict:
 
 
 def _env_overrides() -> dict:
-    """Read ``TUQUEQUE_*`` env vars and map them into config keys.
+    """Read ``BOTMASK_*`` env vars and map them into config keys.
 
     This namespace is **isolated** from the host's generic ``BROWSER_*`` /
-    ``DISPLAY`` etc., so embedding tuqueque in another project never collides.
+    ``DISPLAY`` etc., so embedding botmask in another project never collides.
 
     Supported mappings (env key → config dict key):
-        TUQUEQUE_HEADLESS      → config["headless"]
-        TUQUEQUE_LOCALE        → config["locale"]
-        TUQUEQUE_TIMEZONE      → config["timezone"]
-        TUQUEQUE_NAVIGATION_TIMEOUT   → config["navigation_timeout"]
-        TUQUEQUE_IMPLICIT_WAIT        → config["implicit_wait"]
-        TUQUEQUE_DELAY_MIN     → config["human_delay_min"]
-        TUQUEQUE_DELAY_MAX     → config["human_delay_max"]
+        BOTMASK_HEADLESS      → config["headless"]
+        BOTMASK_LOCALE        → config["locale"]
+        BOTMASK_TIMEZONE      → config["timezone"]
+        BOTMASK_NAVIGATION_TIMEOUT   → config["navigation_timeout"]
+        BOTMASK_IMPLICIT_WAIT        → config["implicit_wait"]
+        BOTMASK_DELAY_MIN     → config["human_delay_min"]
+        BOTMASK_DELAY_MAX     → config["human_delay_max"]
     """
     overrides = {}
     mapping = {
@@ -85,7 +85,7 @@ def _env_overrides() -> dict:
         "DELAY_MAX": "human_delay_max",
     }
     for env_key, cfg_key in mapping.items():
-        val = os.getenv("TUQUEQUE_%s" % env_key)
+        val = os.getenv("BOTMASK_%s" % env_key)
         if val is not None:
             # Convert booleans / ints / floats where sensible
             if cfg_key == "headless":
@@ -111,7 +111,7 @@ def get_browser_config() -> dict:
 
     Precedence (highest first):
 
-    1. ``tuqueque.toml`` config file — all browser/profile/cdp/behavior settings.
+    1. ``botmask.toml`` config file — all browser/profile/cdp/behavior settings.
        If a key is present in TOML, it is used exclusively; the env vars listed
        below are *only* used for the display vars noted below.
 
@@ -169,16 +169,16 @@ def get_browser_config() -> dict:
     for k, v in defaults.items():
         merged.setdefault(k, v)
 
-    # --- TUQUEQUE_* env overrides are no longer the primary mechanism;
+    # --- BOTMASK_* env overrides are no longer the primary mechanism;
     # the TOML file is.  Keep a tiny namespace‑safe fallback so that a user
     # can quickly toggle a single flag at the shell without editing a file:
     tiny_over = {}
     for key in ("headless", "locale", "timezone", "navigation_timeout",
                 "implicit_wait", "human_delay_min", "human_delay_max"):
-        val = os.getenv(f"TUQUEQUE_{key.upper()}")
+        val = os.getenv(f"BOTMASK_{key.upper()}")
         if val is not None:
             tiny_over[key] = val
-    merged.update(tiny_over)   # TUQUEQUE_* still wins over defaults, but
+    merged.update(tiny_over)   # BOTMASK_* still wins over defaults, but
                                # TOML keys already set are preserved because
                                # dict.update() only inserts missing keys when
                                # using dict.setdefault — but update() overrides.
@@ -249,9 +249,9 @@ def get_launch_options(persistent: bool = False) -> dict:
     Uses the merged configuration from :func:`get_browser_config`, so the
     priority order is:
 
-    1. ``TUQUEQUE_*`` environment variables (namespace‑safe, no collision with
+    1. ``BOTMASK_*`` environment variables (namespace‑safe, no collision with
        the host project's env vars).
-    2. ``tuqueque.toml`` config file.
+    2. ``botmask.toml`` config file.
     3. Legacy bare env vars (``BROWSER_*``, ``DISPLAY``, etc.) – only used
        when the above sources do not provide a value.
 
@@ -263,10 +263,10 @@ def get_launch_options(persistent: bool = False) -> dict:
     """
     config = get_browser_config()
 
-    # Headless from the merged config (TUQUEQUE_* > TOML > defaults > legacy)
+    # Headless from the merged config (BOTMASK_* > TOML > defaults > legacy)
     headless = config["headless"]
 
-    # Browser args: prefer those from the config file / TUQUEQUE_* env,
+    # Browser args: prefer those from the config file / BOTMASK_* env,
     # otherwise fall back to reading ``BROWSER_ARGS`` env var.
     args = config.get("browser", {}).get("args") or get_browser_args()
 

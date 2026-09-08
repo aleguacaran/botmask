@@ -1,4 +1,4 @@
-# tuqueque configuration file (example - copy to tuqueque.toml for customization)
+# botmask configuration file (example - copy to botmask.toml for customization)
 # This file is NOT tracked by git (see .gitignore)
 
 [browser]

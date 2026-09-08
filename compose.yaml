@@ -4,9 +4,9 @@ services:
       context: .
       target: develop
       tags:
-        - tuqueque:develop
-    image: tuqueque:develop
-    container_name: tuqueque
+        - botmask:develop
+    image: botmask:develop
+    container_name: botmask
     stdin_open: true
     tty: true
     env_file: .env

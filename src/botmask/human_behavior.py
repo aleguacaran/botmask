@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Human Behavior Simulation Module - tuqueque
+Human Behavior Simulation Module - botmask
 
 Realistic human behavior simulation for browser automation:
 - Bezier-curve mouse movement
@@ -12,7 +12,7 @@ Realistic human behavior simulation for browser automation:
 - Typing simulation with per-character variance
 
 Usage:
-    from tuqueque.human_behavior import HumanBehavior
+    from botmask.human_behavior import HumanBehavior
 
     hb = HumanBehavior(page)
     hb.warm_up()

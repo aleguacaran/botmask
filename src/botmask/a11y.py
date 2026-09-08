@@ -6,7 +6,7 @@ The AI never computes pixel coordinates. It picks an element by index from a
 numbered snapshot; this module resolves index -> locator -> bounding_box.
 
 Usage:
-    from tuqueque.a11y import snapshot_interactives, get_locator
+    from botmask.a11y import snapshot_interactives, get_locator
 
     items = snapshot_interactives(page)   # [{"index": 0, "tag": "a", ...}, ...]
     locator = get_locator(page, 42)       # -> page.locator(...).nth(42)

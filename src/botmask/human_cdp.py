@@ -9,24 +9,24 @@ list_pages, viewport) use direct CDP access. AI targeting commands
 (a11y, a11y_click, os_click, input_calib) use the interaction-model modules.
 
 Usage:
-    python -m tuqueque.human_cdp click       "h2#Enlaces_externos"
-    python -m tuqueque.human_cdp scroll      --times 3 --direction down
-    python -m tuqueque.human_cdp hover       --count 4
-    python -m tuqueque.human_cdp read        --sections 3
-    python -m tuqueque.human_cdp warm_up
-    python -m tuqueque.human_cdp viewport
-    python -m tuqueque.human_cdp fill        "#input-id" "text to type"
-    python -m tuqueque.human_cdp navigate    "https://example.com"
-    python -m tuqueque.human_cdp type_text   "#search" "python developer"
-    python -m tuqueque.human_cdp snapshot    [--filePath /tmp/snapshot.txt]
-    python -m tuqueque.human_cdp eval        "document.title"
-    python -m tuqueque.human_cdp list_pages
-    python -m tuqueque.human_cdp new_page    "https://example.com"
-    python -m tuqueque.human_cdp screenshot  [--filePath /tmp/shot.png]
-    python -m tuqueque.human_cdp a11y        [--limit 300]
-    python -m tuqueque.human_cdp a11y_click 42
-    python -m tuqueque.human_cdp os_click    42
-    python -m tuqueque.human_cdp input_calib
+    python -m botmask.human_cdp click       "h2#Enlaces_externos"
+    python -m botmask.human_cdp scroll      --times 3 --direction down
+    python -m botmask.human_cdp hover       --count 4
+    python -m botmask.human_cdp read        --sections 3
+    python -m botmask.human_cdp warm_up
+    python -m botmask.human_cdp viewport
+    python -m botmask.human_cdp fill        "#input-id" "text to type"
+    python -m botmask.human_cdp navigate    "https://example.com"
+    python -m botmask.human_cdp type_text   "#search" "python developer"
+    python -m botmask.human_cdp snapshot    [--filePath /tmp/snapshot.txt]
+    python -m botmask.human_cdp eval        "document.title"
+    python -m botmask.human_cdp list_pages
+    python -m botmask.human_cdp new_page    "https://example.com"
+    python -m botmask.human_cdp screenshot  [--filePath /tmp/shot.png]
+    python -m botmask.human_cdp a11y        [--limit 300]
+    python -m botmask.human_cdp a11y_click 42
+    python -m botmask.human_cdp os_click    42
+    python -m botmask.human_cdp input_calib
 
 Output: JSON with {status, action, message, ...} for machine parsing.
 """
@@ -39,10 +39,10 @@ import time
 
 from patchright.sync_api import sync_playwright, Page
 
-from tuqueque.a11y import resolve_target, snapshot_interactives
-from tuqueque.config import get_cdp_url
-from tuqueque.human_behavior import HumanBehavior
-from tuqueque.input_os import calibrate, click_locator
+from botmask.a11y import resolve_target, snapshot_interactives
+from botmask.config import get_cdp_url
+from botmask.human_behavior import HumanBehavior
+from botmask.input_os import calibrate, click_locator
 
 
 def _get_page() -> tuple:

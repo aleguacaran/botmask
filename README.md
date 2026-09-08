@@ -1,4 +1,4 @@
-# tuqueque
+# botmask
 
 > Containerized human-behavior browser automation toolkit. Installable as a plugin in other projects that need browser automation while evading anti-bot systems.
 
@@ -76,8 +76,8 @@ runtime (`pip install .` + `patchright install chromium`), cached in the `cache`
 
 | Target | For | Display | Build |
 | --- | --- | --- | --- |
-| `develop` (default via compose.yaml) | local dev on host Wayland/X11 | host display | `docker build --target develop -t tuqueque:develop .` |
-| `deploy` (default target of plain `docker build`) | headless machine / CI | Xvfb + noVNC | `docker build --target deploy -t tuqueque:deploy .` |
+| `develop` (default via compose.yaml) | local dev on host Wayland/X11 | host display | `docker build --target develop -t botmask:develop .` |
+| `deploy` (default target of plain `docker build`) | headless machine / CI | Xvfb + noVNC | `docker build --target deploy -t botmask:deploy .` |
 
 Base image is Debian `python:slim` — Brave requires glibc and cannot run on Alpine/musl.
 
