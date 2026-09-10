@@ -5,6 +5,7 @@ botmask bootstrap — launch Brave with CDP exposed, hold until killed.
 Called by start.sh after deps are installed. Does NOT run pip install
 itself — that belongs in start.sh or the Dockerfile.
 """
+import json
 import os
 import signal
 import subprocess
@@ -28,6 +29,20 @@ def main():
     # Remove stale lock files from previous unclean shutdowns
     for lock in ("SingletonLock", "SingletonCookie", "SingletonSocket"):
         (data_dir / lock).unlink(missing_ok=True)
+
+    # Disable P3A telemetry in the profile's Local State
+    local_state = data_dir / "Local State"
+    if local_state.exists():
+        try:
+            state = json.loads(local_state.read_text())
+        except (json.JSONDecodeError, OSError):
+            state = {}
+    else:
+        state = {}
+    state.setdefault("brave", {})
+    state["brave"].setdefault("p3a", {})["enabled"] = False
+    state["brave"].setdefault("stats", {})["reporting_enabled"] = False
+    local_state.write_text(json.dumps(state))
 
     cdp_port = os.getenv("BROWSER_CDP_PORT", "9222")
     cdp_host = os.getenv("BROWSER_CDP_HOST", "0.0.0.0")
