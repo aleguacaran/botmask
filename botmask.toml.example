@@ -13,6 +13,8 @@ headless = false
 
 # Additional Chromium/Brave arguments (list)
 # Default anti-detection args (always included unless overridden):
+# NOTE: --ozone-platform is auto-detected from WAYLAND_DISPLAY env var
+#       (wayland if set, x11 otherwise). Override here only if needed.
 args = [
     "--disable-blink-features=AutomationControlled",
     "--disable-dev-shm-usage",

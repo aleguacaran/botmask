@@ -221,6 +221,13 @@ def get_browser_args() -> list:
             "--window-size=1920,1080",
         ]
 
+        # Auto-detect Wayland and set ozone platform
+        wayland_display = os.getenv("WAYLAND_DISPLAY")
+        if wayland_display:
+            args.append("--ozone-platform=wayland")
+        else:
+            args.append("--ozone-platform=x11")
+
         cdp_port = get_env("BROWSER_CDP_PORT", "")
         if cdp_port:
             cdp_host = get_env("BROWSER_CDP_HOST", "0.0.0.0")
