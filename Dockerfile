@@ -32,9 +32,9 @@ RUN echo "b9e7a1c2d3f4e5a6b7c8d9e0f1a2b3c4" > /etc/machine-id && \
 
 RUN curl -fsS https://dl.brave.com/install.sh | sh
 
-COPY . .
-
 WORKDIR /app
+
+COPY . .
 
 FROM base AS develop
 
