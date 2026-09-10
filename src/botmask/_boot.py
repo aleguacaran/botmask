@@ -57,9 +57,21 @@ def main():
     print(f"[botmask] Brave launched (pid={proc.pid}), CDP on {cdp_host}:{cdp_port}",
           flush=True)
 
+    # Brave often ignores --remote-debugging-address and binds to 127.0.0.1 only.
+    # Use socat to forward 0.0.0.0:9223 → 127.0.0.1:9222 so CDP is reachable from outside.
+    socat_port = int(cdp_port) + 1
+    socat = subprocess.Popen(
+        ["socat", f"TCP-LISTEN:{socat_port},fork,bind=0.0.0.0", f"TCP:127.0.0.1:{cdp_port}"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    print(f"[botmask] socat relay :{socat_port} → :{cdp_port} (pid={socat.pid})", flush=True)
+
     # Forward signals to Brave so docker stop works cleanly
-    signal.signal(signal.SIGTERM, lambda *_: proc.terminate())
-    signal.signal(signal.SIGINT, lambda *_: proc.terminate())
+    def shutdown(*_):
+        proc.terminate()
+        socat.terminate()
+    signal.signal(signal.SIGTERM, shutdown)
+    signal.signal(signal.SIGINT, shutdown)
 
     try:
         sys.exit(proc.wait())
