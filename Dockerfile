@@ -34,6 +34,8 @@ RUN curl -fsS https://dl.brave.com/install.sh | sh
 
 COPY . .
 
+WORKDIR /app
+
 FROM base AS develop
 
 ENTRYPOINT ["/app/start.sh"]
