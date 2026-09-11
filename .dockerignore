@@ -1,4 +1,18 @@
-# Browser data
+# Git
+.git/
+.gitignore
+
+# GitLab CI
+.gitlab/
+
+# Environment files
+.env
+.env.example
+
+# Config example (not needed in image, user copies to botmask.toml)
+botmask.toml.example
+
+# Browser data (runtime profile)
 browser_data/
 
 # Python cache
@@ -8,15 +22,14 @@ __pycache__/
 build/
 *.egg-info/
 
-# Git
-.gitignore
+# Docker (no recursion)
+docker-compose*.yml
+compose*.yaml
 
-# Environment files
-.env
-.env.example
-
-# Working docs (not tracked)
+# Docs (not needed in image)
 docs/
+README.md
+AGENTS.md
 
-# GitLab CI (not needed in the image)
-.gitlab/
+# Tests
+tests/
