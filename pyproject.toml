@@ -2,6 +2,7 @@
 name = "botmask"
 version = "0.1.1"
 description = "Containerized human-behavior browser automation toolkit (Brave + Patchright)"
+readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "patchright",
