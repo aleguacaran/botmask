@@ -59,52 +59,6 @@ def _find_toml() -> dict:
     return {}
 
 
-def _env_overrides() -> dict:
-    """Read ``BOTMASK_*`` env vars and map them into config keys.
-
-    This namespace is **isolated** from the host's generic ``BROWSER_*`` /
-    ``DISPLAY`` etc., so embedding botmask in another project never collides.
-
-    Supported mappings (env key → config dict key):
-        BOTMASK_HEADLESS      → config["headless"]
-        BOTMASK_LOCALE        → config["locale"]
-        BOTMASK_TIMEZONE      → config["timezone"]
-        BOTMASK_NAVIGATION_TIMEOUT   → config["navigation_timeout"]
-        BOTMASK_IMPLICIT_WAIT        → config["implicit_wait"]
-        BOTMASK_DELAY_MIN     → config["human_delay_min"]
-        BOTMASK_DELAY_MAX     → config["human_delay_max"]
-    """
-    overrides = {}
-    mapping = {
-        "HEADLESS": "headless",
-        "LOCALE": "locale",
-        "TIMEZONE": "timezone",
-        "NAVIGATION_TIMEOUT": "navigation_timeout",
-        "IMPLICIT_WAIT": "implicit_wait",
-        "DELAY_MIN": "human_delay_min",
-        "DELAY_MAX": "human_delay_max",
-    }
-    for env_key, cfg_key in mapping.items():
-        val = os.getenv("BOTMASK_%s" % env_key)
-        if val is not None:
-            # Convert booleans / ints / floats where sensible
-            if cfg_key == "headless":
-                overrides[cfg_key] = val.lower() in ("true", "1", "yes")
-            elif cfg_key in ("navigation_timeout", "implicit_wait"):
-                try:
-                    overrides[cfg_key] = int(val)
-                except ValueError:
-                    pass
-            elif cfg_key in ("human_delay_min", "human_delay_max"):
-                try:
-                    overrides[cfg_key] = float(val)
-                except ValueError:
-                    pass
-            else:
-                overrides[cfg_key] = val
-    return overrides
-
-
 def get_browser_config() -> dict:
     """
     Get browser configuration, with TOML as the primary source.
@@ -112,17 +66,14 @@ def get_browser_config() -> dict:
     Precedence (highest first):
 
     1. ``botmask.toml`` config file — all browser/profile/cdp/behavior settings.
-       If a key is present in TOML, it is used exclusively; the env vars listed
-       below are *only* used for the display vars noted below.
 
     2. Environment variables — **only** the display vars ``DISPLAY`` and
        ``WAYLAND_DISPLAY`` are read from the host environment; they override
        any corresponding TOML values so that a running container / bare-metal
        setup can still locate its display surface.
 
-    3. Built‑in defaults — used when a TOML key is absent and the env var
-       is also absent.  These defaults ensure the project starts immediately
-       without any config file or env var.
+    3. Built‑in defaults — used when a TOML key is absent.  These defaults
+       ensure the project starts immediately without any config file.
 
     Keys that always come from the environment (never from TOML):
 
@@ -168,25 +119,6 @@ def get_browser_config() -> dict:
     }
     for k, v in defaults.items():
         merged.setdefault(k, v)
-
-    # --- BOTMASK_* env overrides are no longer the primary mechanism;
-    # the TOML file is.  Keep a tiny namespace‑safe fallback so that a user
-    # can quickly toggle a single flag at the shell without editing a file:
-    tiny_over = {}
-    for key in ("headless", "locale", "timezone", "navigation_timeout",
-                "implicit_wait", "human_delay_min", "human_delay_max"):
-        val = os.getenv(f"BOTMASK_{key.upper()}")
-        if val is not None:
-            tiny_over[key] = val
-    merged.update(tiny_over)   # BOTMASK_* still wins over defaults, but
-                               # TOML keys already set are preserved because
-                               # dict.update() only inserts missing keys when
-                               # using dict.setdefault — but update() overrides.
-    # Actually, to keep TOML as supreme, we should NOT update with tiny_over
-    # if the key already exists in merged from TOML.  Let's do it properly:
-    for k, v in tiny_over.items():
-        if k not in merged or merged[k] is None:
-            merged[k] = v
 
     return merged
 
@@ -256,11 +188,9 @@ def get_launch_options(persistent: bool = False) -> dict:
     Uses the merged configuration from :func:`get_browser_config`, so the
     priority order is:
 
-    1. ``BOTMASK_*`` environment variables (namespace‑safe, no collision with
-       the host project's env vars).
-    2. ``botmask.toml`` config file.
-    3. Legacy bare env vars (``BROWSER_*``, ``DISPLAY``, etc.) – only used
-       when the above sources do not provide a value.
+    1. ``botmask.toml`` config file.
+    2. Environment ``BROWSER_*`` vars – only used when the TOML does not
+       provide a value.
 
     Args:
         persistent: Whether to use persistent context (for login-required sites)
@@ -270,10 +200,10 @@ def get_launch_options(persistent: bool = False) -> dict:
     """
     config = get_browser_config()
 
-    # Headless from the merged config (BOTMASK_* > TOML > defaults > legacy)
+    # Headless from the merged config (TOML > defaults)
     headless = config["headless"]
 
-    # Browser args: prefer those from the config file / BOTMASK_* env,
+    # Browser args: prefer those from the config file,
     # otherwise fall back to reading ``BROWSER_ARGS`` env var.
     args = config.get("browser", {}).get("args") or get_browser_args()
 
@@ -437,6 +367,7 @@ __all__ = [
     "get_rotated_user_agent",
     "get_rotated_viewport",
     "get_browserforge_headers",
+    "get_env",
     "USER_AGENT_POOL",
     "VIEWPORT_POOL",
 ]
