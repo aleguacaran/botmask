@@ -150,7 +150,12 @@ def get_browser_config() -> dict:
     merged["display"] = os.getenv("DISPLAY")
     merged["wayland_display"] = os.getenv("WAYLAND_DISPLAY")
 
-    # ---------- 3. Ensure critical keys have sane defaults ----------
+    # ---------- 3. Apply BOTMASK_* env overrides ----------
+    # Namespace-safe env vars override TOML and defaults for runtime flexibility.
+    env_overrides = _env_overrides()
+    merged.update(env_overrides)
+
+    # ---------- 4. Ensure critical keys have sane defaults ----------
     # If the TOML file is missing or a key is absent, fall back to defaults
     # only for keys that have no reasonable alternative source.
     defaults = {
@@ -168,25 +173,6 @@ def get_browser_config() -> dict:
     }
     for k, v in defaults.items():
         merged.setdefault(k, v)
-
-    # --- BOTMASK_* env overrides are no longer the primary mechanism;
-    # the TOML file is.  Keep a tiny namespace‑safe fallback so that a user
-    # can quickly toggle a single flag at the shell without editing a file:
-    tiny_over = {}
-    for key in ("headless", "locale", "timezone", "navigation_timeout",
-                "implicit_wait", "human_delay_min", "human_delay_max"):
-        val = os.getenv(f"BOTMASK_{key.upper()}")
-        if val is not None:
-            tiny_over[key] = val
-    merged.update(tiny_over)   # BOTMASK_* still wins over defaults, but
-                               # TOML keys already set are preserved because
-                               # dict.update() only inserts missing keys when
-                               # using dict.setdefault — but update() overrides.
-    # Actually, to keep TOML as supreme, we should NOT update with tiny_over
-    # if the key already exists in merged from TOML.  Let's do it properly:
-    for k, v in tiny_over.items():
-        if k not in merged or merged[k] is None:
-            merged[k] = v
 
     return merged
 
@@ -437,6 +423,7 @@ __all__ = [
     "get_rotated_user_agent",
     "get_rotated_viewport",
     "get_browserforge_headers",
+    "get_env",
     "USER_AGENT_POOL",
     "VIEWPORT_POOL",
 ]
