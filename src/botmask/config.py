@@ -3,7 +3,7 @@
 Browser Configuration Module - botmask
 
 Centralized browser configuration for the humanized browser automation toolkit.
-All browser options are sourced from .env file (inherited from the jobs project).
+All browser options are sourced from TOML config or built-in defaults.
 
 Usage:
     from botmask.config import get_browser_config, get_launch_options
@@ -57,52 +57,6 @@ def _find_toml() -> dict:
             return tomllib.load(f)
 
     return {}
-
-
-def _env_overrides() -> dict:
-    """Read ``BOTMASK_*`` env vars and map them into config keys.
-
-    This namespace is **isolated** from the host's generic ``BROWSER_*`` /
-    ``DISPLAY`` etc., so embedding botmask in another project never collides.
-
-    Supported mappings (env key → config dict key):
-        BOTMASK_HEADLESS      → config["headless"]
-        BOTMASK_LOCALE        → config["locale"]
-        BOTMASK_TIMEZONE      → config["timezone"]
-        BOTMASK_NAVIGATION_TIMEOUT   → config["navigation_timeout"]
-        BOTMASK_IMPLICIT_WAIT        → config["implicit_wait"]
-        BOTMASK_DELAY_MIN     → config["human_delay_min"]
-        BOTMASK_DELAY_MAX     → config["human_delay_max"]
-    """
-    overrides = {}
-    mapping = {
-        "HEADLESS": "headless",
-        "LOCALE": "locale",
-        "TIMEZONE": "timezone",
-        "NAVIGATION_TIMEOUT": "navigation_timeout",
-        "IMPLICIT_WAIT": "implicit_wait",
-        "DELAY_MIN": "human_delay_min",
-        "DELAY_MAX": "human_delay_max",
-    }
-    for env_key, cfg_key in mapping.items():
-        val = os.getenv("BOTMASK_%s" % env_key)
-        if val is not None:
-            # Convert booleans / ints / floats where sensible
-            if cfg_key == "headless":
-                overrides[cfg_key] = val.lower() in ("true", "1", "yes")
-            elif cfg_key in ("navigation_timeout", "implicit_wait"):
-                try:
-                    overrides[cfg_key] = int(val)
-                except ValueError:
-                    pass
-            elif cfg_key in ("human_delay_min", "human_delay_max"):
-                try:
-                    overrides[cfg_key] = float(val)
-                except ValueError:
-                    pass
-            else:
-                overrides[cfg_key] = val
-    return overrides
 
 
 def get_browser_config() -> dict:
@@ -234,11 +188,9 @@ def get_launch_options(persistent: bool = False) -> dict:
     Uses the merged configuration from :func:`get_browser_config`, so the
     priority order is:
 
-    1. ``BOTMASK_*`` environment variables (namespace‑safe, no collision with
-       the host project's env vars).
-    2. ``botmask.toml`` config file.
-    3. Legacy bare env vars (``BROWSER_*``, ``DISPLAY``, etc.) – only used
-       when the above sources do not provide a value.
+    1. ``botmask.toml`` config file.
+    2. Environment ``BROWSER_*`` vars – only used when the TOML does not
+       provide a value.
 
     Args:
         persistent: Whether to use persistent context (for login-required sites)
@@ -248,10 +200,10 @@ def get_launch_options(persistent: bool = False) -> dict:
     """
     config = get_browser_config()
 
-    # Headless from the merged config (BOTMASK_* > TOML > defaults > legacy)
+    # Headless from the merged config (TOML > defaults)
     headless = config["headless"]
 
-    # Browser args: prefer those from the config file / BOTMASK_* env,
+    # Browser args: prefer those from the config file,
     # otherwise fall back to reading ``BROWSER_ARGS`` env var.
     args = config.get("browser", {}).get("args") or get_browser_args()
 

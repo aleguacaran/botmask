@@ -8,7 +8,7 @@ A reusable, containerized browser-automation kit that simulates realistic human 
 (Bezier-curve mouse movement, inertia scrolling, natural delays, typo typing, warm-up
 sessions, reading simulation, auth-barrier detection) on top of **Brave Browser + Patchright**.
 
-Extracted from the `career-ops` pipeline (`~/Proyectos/ai/jobs`) into an isolated, installable
+Extracted into an isolated, installable package.
 package so it can be dropped into any project that needs stealthy browser interaction.
 
 ## Stack
@@ -19,7 +19,7 @@ package so it can be dropped into any project that needs stealthy browser intera
 | Browser | **Brave** (Chromium; ad-blocking, anti-fingerprinting) |
 | Automation | **Patchright** (undetectable Playwright fork, CDP) |
 | Human behavior | `human_behavior` module (this project) |
-| Config | `config` module, env-driven (inherited from `jobs`) |
+| Config | `config` module, TOML + defaults |
 | Hardening | BrowserForge headers (planned), OS-level input fallback (planned) |
 
 **Decision (Phase 0, `docs/decision.md`): Brave only.** Firefox engines (camoufox,
@@ -35,7 +35,7 @@ offset calibration.
 
 ## Container usage
 
-### Local (real display, like `jobs`) — `develop` target
+### Local (real display) — `develop` target
 
 Shares the host display into the container (Wayland socket + X11). `compose.yaml`
 builds the `develop` stage (no virtual display stack).
@@ -81,6 +81,6 @@ runtime (`pip install .` + `patchright install chromium`), cached in the `cache`
 
 Base image is Debian `python:slim` — Brave requires glibc and cannot run on Alpine/musl.
 
-## Migrating from `jobs`
+## Migration guide
 
-What can and cannot be reused from the `jobs` project: `docs/migration-from-jobs.md`.
+Historical migration notes: `docs/migration-from-jobs.md`.
