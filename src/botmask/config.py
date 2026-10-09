@@ -112,17 +112,14 @@ def get_browser_config() -> dict:
     Precedence (highest first):
 
     1. ``botmask.toml`` config file — all browser/profile/cdp/behavior settings.
-       If a key is present in TOML, it is used exclusively; the env vars listed
-       below are *only* used for the display vars noted below.
 
     2. Environment variables — **only** the display vars ``DISPLAY`` and
        ``WAYLAND_DISPLAY`` are read from the host environment; they override
        any corresponding TOML values so that a running container / bare-metal
        setup can still locate its display surface.
 
-    3. Built‑in defaults — used when a TOML key is absent and the env var
-       is also absent.  These defaults ensure the project starts immediately
-       without any config file or env var.
+    3. Built‑in defaults — used when a TOML key is absent.  These defaults
+       ensure the project starts immediately without any config file.
 
     Keys that always come from the environment (never from TOML):
 
@@ -150,12 +147,7 @@ def get_browser_config() -> dict:
     merged["display"] = os.getenv("DISPLAY")
     merged["wayland_display"] = os.getenv("WAYLAND_DISPLAY")
 
-    # ---------- 3. Apply BOTMASK_* env overrides ----------
-    # Namespace-safe env vars override TOML and defaults for runtime flexibility.
-    env_overrides = _env_overrides()
-    merged.update(env_overrides)
-
-    # ---------- 4. Ensure critical keys have sane defaults ----------
+    # ---------- 3. Ensure critical keys have sane defaults ----------
     # If the TOML file is missing or a key is absent, fall back to defaults
     # only for keys that have no reasonable alternative source.
     defaults = {
