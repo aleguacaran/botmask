@@ -83,4 +83,4 @@ Base image is Debian `python:slim` — Brave requires glibc and cannot run on Al
 
 ## Migration guide
 
-Historical migration notes: `docs/migration-from-jobs.md`.
+See `docs/migration.md` for historical migration notes.
