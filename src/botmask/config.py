@@ -112,17 +112,14 @@ def get_browser_config() -> dict:
     Precedence (highest first):
 
     1. ``botmask.toml`` config file — all browser/profile/cdp/behavior settings.
-       If a key is present in TOML, it is used exclusively; the env vars listed
-       below are *only* used for the display vars noted below.
 
     2. Environment variables — **only** the display vars ``DISPLAY`` and
        ``WAYLAND_DISPLAY`` are read from the host environment; they override
        any corresponding TOML values so that a running container / bare-metal
        setup can still locate its display surface.
 
-    3. Built‑in defaults — used when a TOML key is absent and the env var
-       is also absent.  These defaults ensure the project starts immediately
-       without any config file or env var.
+    3. Built‑in defaults — used when a TOML key is absent.  These defaults
+       ensure the project starts immediately without any config file.
 
     Keys that always come from the environment (never from TOML):
 
@@ -168,25 +165,6 @@ def get_browser_config() -> dict:
     }
     for k, v in defaults.items():
         merged.setdefault(k, v)
-
-    # --- BOTMASK_* env overrides are no longer the primary mechanism;
-    # the TOML file is.  Keep a tiny namespace‑safe fallback so that a user
-    # can quickly toggle a single flag at the shell without editing a file:
-    tiny_over = {}
-    for key in ("headless", "locale", "timezone", "navigation_timeout",
-                "implicit_wait", "human_delay_min", "human_delay_max"):
-        val = os.getenv(f"BOTMASK_{key.upper()}")
-        if val is not None:
-            tiny_over[key] = val
-    merged.update(tiny_over)   # BOTMASK_* still wins over defaults, but
-                               # TOML keys already set are preserved because
-                               # dict.update() only inserts missing keys when
-                               # using dict.setdefault — but update() overrides.
-    # Actually, to keep TOML as supreme, we should NOT update with tiny_over
-    # if the key already exists in merged from TOML.  Let's do it properly:
-    for k, v in tiny_over.items():
-        if k not in merged or merged[k] is None:
-            merged[k] = v
 
     return merged
 
@@ -437,6 +415,7 @@ __all__ = [
     "get_rotated_user_agent",
     "get_rotated_viewport",
     "get_browserforge_headers",
+    "get_env",
     "USER_AGENT_POOL",
     "VIEWPORT_POOL",
 ]
