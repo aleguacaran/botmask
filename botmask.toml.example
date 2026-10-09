@@ -1,8 +1,7 @@
 # botmask configuration file (example - copy to botmask.toml for customization)
 # This file is NOT tracked by git (see .gitignore)
 
-[browser]
-# Path to the Brave executable
+# Browser executable path
 executable = "/usr/bin/brave-browser"
 
 # Directory for user data (profile, cookies, cache)
@@ -10,6 +9,26 @@ user_data_dir = "/app/browser_data"
 
 # Run browser in headless mode (no GUI)
 headless = false
+
+# Browser locale/language
+locale = "es-VE"
+
+# Timezone string
+timezone = "America/Caracas"
+
+# Geolocation coordinates (decimal degrees)
+latitude = 10.4806
+longitude = -66.9036
+
+# Navigation timeout (seconds)
+navigation_timeout = 30
+
+# Implicit wait (seconds)
+implicit_wait = 10
+
+# Human-like delay between actions (seconds)
+human_delay_min = 3.0
+human_delay_max = 8.0
 
 # Additional Chromium/Brave arguments (list)
 # Default anti-detection args (always included unless overridden):
@@ -32,35 +51,3 @@ args = [
     "--disable-background-timer-throttling",
     "--window-size=1920,1080",
 ]
-
-# Navigation timeout (seconds)
-navigation_timeout = 30
-
-# Implicit wait (seconds)
-implicit_wait = 10
-
-# Human-like delay between actions (seconds)
-human_delay_min = 3.0
-human_delay_max = 8.0
-
-# CDP connection settings
-[cdp]
-host = "127.0.0.1"
-port = 9222
-
-[profile]
-# Browser locale/language
-locale = "es-VE"
-
-# Timezone string
-timezone = "America/Caracas"
-
-# Geolocation coordinates (decimal degrees)
-latitude = 10.4806
-longitude = -66.9036
-
-# Human behavior parameters
-[behavior]
-# Human delay ranges (seconds)
-delay_min = 3.0
-delay_max = 8.0
