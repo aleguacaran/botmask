@@ -3,7 +3,7 @@
 Browser Configuration Module - botmask
 
 Centralized browser configuration for the humanized browser automation toolkit.
-All browser options are sourced from .env file (inherited from the jobs project).
+All browser options are sourced from TOML config or built-in defaults.
 
 Usage:
     from botmask.config import get_browser_config, get_launch_options
