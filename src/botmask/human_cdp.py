@@ -9,13 +9,18 @@ list_pages, viewport) use direct CDP access. AI targeting commands
 (a11y, a11y_click, os_click, input_calib) use the interaction-model modules.
 
 Usage:
+    python -m botmask.human_cdp [--tab URL_SUBSTR] COMMAND ...
+
     python -m botmask.human_cdp click       "h2#Enlaces_externos"
     python -m botmask.human_cdp scroll      --times 3 --direction down
+    python -m botmask.human_cdp scroll      --container          (inner scroller)
     python -m botmask.human_cdp hover       --count 4
     python -m botmask.human_cdp read        --sections 3
     python -m botmask.human_cdp warm_up
     python -m botmask.human_cdp viewport
     python -m botmask.human_cdp fill        "#input-id" "text to type"
+    python -m botmask.human_cdp fill        "#input-id" "text" --clear
+    python -m botmask.human_cdp fill_clear  "#input-id" "replacement text"
     python -m botmask.human_cdp navigate    "https://example.com"
     python -m botmask.human_cdp type_text   "#search" "python developer"
     python -m botmask.human_cdp snapshot    [--filePath /tmp/snapshot.txt]
@@ -23,6 +28,9 @@ Usage:
     python -m botmask.human_cdp list_pages
     python -m botmask.human_cdp new_page    "https://example.com"
     python -m botmask.human_cdp screenshot  [--filePath /tmp/shot.png]
+    python -m botmask.human_cdp check                            (overlays/modals)
+    python -m botmask.human_cdp doctor                           (CDP health)
+    python -m botmask.human_cdp stealth_audit                    (detection probes)
     python -m botmask.human_cdp a11y        [--limit 300]
     python -m botmask.human_cdp a11y_click 42
     python -m botmask.human_cdp os_click    42
@@ -45,18 +53,36 @@ from botmask.human_behavior import HumanBehavior
 from botmask.input_os import calibrate, click_locator
 
 
-def _get_page() -> tuple:
-    """Connect to CDP and return (playwright, browser, page)."""
+def _get_page(tab_filter: str | None = None) -> tuple:
+    """Connect to CDP and return (playwright, browser, page).
+
+    When ``tab_filter`` is given, pick the first open tab whose URL contains
+    it (case-insensitive). Without it, use the most recently opened tab.
+    """
     cdp_url = get_cdp_url()
     pw = sync_playwright().start()
     browser = pw.chromium.connect_over_cdp(cdp_url)
 
-    # Find the first available page across all contexts
     page = None
-    for ctx in browser.contexts:
-        if ctx.pages:
-            page = ctx.pages[-1]
-            break
+    if tab_filter:
+        needle = tab_filter.lower()
+        for ctx in browser.contexts:
+            for p in ctx.pages:
+                if needle in p.url.lower():
+                    page = p
+                    break
+            if page:
+                break
+        if not page:
+            available = [p.url for c in browser.contexts for p in c.pages]
+            raise ValueError(
+                f"No tab matching '{tab_filter}'. Open tabs: {available}"
+            )
+    else:
+        for ctx in browser.contexts:
+            if ctx.pages:
+                page = ctx.pages[-1]
+                break
 
     if not page:
         page = browser.new_page()
@@ -130,11 +156,89 @@ def cmd_fill(page: Page, args) -> dict:
     """Fill input with human-like typing."""
     hb = HumanBehavior(page)
     locator = page.locator(args.selector)
+    if getattr(args, "clear", False):
+        # Select-all + delete before typing (fill appends, never clears)
+        locator.click()
+        time.sleep(random.uniform(0.15, 0.35))
+        page.keyboard.press("Control+a")
+        time.sleep(random.uniform(0.1, 0.2))
+        page.keyboard.press("Delete")
+        time.sleep(random.uniform(0.2, 0.4))
     hb.human_type(locator, args.text)
     return {
         "status": "ok",
         "action": "fill",
         "selector": args.selector,
+        "cleared": getattr(args, "clear", False),
+    }
+
+
+def cmd_fill_clear(page: Page, args) -> dict:
+    """Clear the field (select-all + delete) then type with human cadence."""
+    hb = HumanBehavior(page)
+    locator = page.locator(args.selector)
+    locator.click()
+    time.sleep(random.uniform(0.2, 0.4))
+    page.keyboard.press("Control+a")
+    time.sleep(random.uniform(0.1, 0.25))
+    page.keyboard.press("Delete")
+    time.sleep(random.uniform(0.2, 0.4))
+    hb.human_type(locator, args.text)
+    return {
+        "status": "ok",
+        "action": "fill_clear",
+        "selector": args.selector,
+    }
+
+
+def cmd_scroll(page: Page, args) -> dict:
+    """Human scroll with inertia, multi-segment.
+
+    With ``--container``, auto-detect the inner scrollable element (e.g.
+    LinkedIn's results panel) and wheel-scroll it instead of the window.
+    """
+    hb = HumanBehavior(page)
+    if getattr(args, "container", False):
+        dy = 600 if args.direction == "down" else -600
+        for _ in range(args.times):
+            moved = page.evaluate("""(dy) => {
+                const els = Array.from(document.querySelectorAll('div, ul, section'));
+                const scrollers = els.filter(el => {
+                    const st = getComputedStyle(el);
+                    return (st.overflowY === 'auto' || st.overflowY === 'scroll')
+                        && el.scrollHeight > el.clientHeight + 100
+                        && el.clientHeight > 200;
+                });
+                if (!scrollers.length) return false;
+                // Pick the tallest inner scroller (most likely the results panel)
+                scrollers.sort((a, b) => b.clientHeight - a.clientHeight);
+                const el = scrollers[0];
+                const before = el.scrollTop;
+                const r = el.getBoundingClientRect();
+                // Human-ish wheel over the container center
+                const cx = r.left + r.width / 2;
+                const cy = r.top + Math.min(r.height / 2, window.innerHeight / 2);
+                return {before, canScroll: el.scrollHeight - el.clientHeight - el.scrollTop > 2, cx, cy};
+            }""", dy)
+            if not moved:
+                return {"status": "ok", "action": "scroll", "container": True,
+                        "message": "no inner scrollable container found"}
+            page.mouse.move(moved["cx"], moved["cy"])
+            page.mouse.wheel(0, dy)
+            time.sleep(random.uniform(0.4, 0.9))
+        return {
+            "status": "ok",
+            "action": "scroll",
+            "container": True,
+            "times": args.times,
+            "direction": args.direction,
+        }
+    hb.human_scroll(times=args.times, direction=args.direction)
+    return {
+        "status": "ok",
+        "action": "scroll",
+        "times": args.times,
+        "direction": args.direction,
     }
 
 
@@ -374,9 +478,209 @@ def cmd_input_calib(page: Page, args) -> dict:
     }
 
 
+_OVERLAY_PROBE_JS = """() => {
+    const findings = [];
+    const visible = (el) => {
+        const st = getComputedStyle(el);
+        const r = el.getBoundingClientRect();
+        return st.display !== 'none' && st.visibility !== 'hidden'
+            && r.width > 10 && r.height > 10;
+    };
+    // SweetAlert2 modals (block submits silently)
+    document.querySelectorAll('.swal2-container').forEach(el => {
+        if (visible(el)) {
+            const title = el.querySelector('.swal2-title, h2');
+            findings.push({
+                kind: 'sweetalert2',
+                text: title ? title.textContent.trim().slice(0, 200) : '',
+                selector: '.swal2-container',
+            });
+        }
+    });
+    // Generic dialogs
+    document.querySelectorAll('[role="dialog"], .modal.show, .modal[style*="block"]')
+        .forEach(el => {
+            if (visible(el)) {
+                const t = (el.getAttribute('aria-label') || el.textContent || '')
+                    .trim().replace(/\\s+/g, ' ').slice(0, 200);
+                if (t) {
+                    findings.push({
+                        kind: 'dialog', text: t,
+                        selector: '[role="dialog"], .modal.show',
+                    });
+                }
+            }
+        });
+    // Cookie / consent banners
+    document.querySelectorAll(
+        '[class*="cookie" i], [id*="cookie" i], [class*="consent" i], [id*="onetrust-banner"], .iubenda-cs-banner'
+    ).forEach(el => {
+        if (visible(el)) {
+            findings.push({
+                kind: 'cookie-banner',
+                text: (el.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 150),
+                selector: el.tagName.toLowerCase() + (el.id ? '#' + el.id : ''),
+            });
+        }
+    });
+    // Captcha challenges (need human)
+    document.querySelectorAll('iframe[src*="recaptcha"], iframe[title*="recaptcha" i], .g-recaptcha, .h-captcha')
+        .forEach(el => {
+            findings.push({
+                kind: 'captcha',
+                text: el.getAttribute('src') || 'captcha widget',
+                selector: 'iframe[src*="recaptcha"]',
+            });
+        });
+    return findings;
+}"""
+
+
+def cmd_check(page: Page, args) -> dict:
+    """Detect blocking overlays: modals, cookie banners, captchas.
+
+    Run before clicking submit — silent SweetAlert2 confirmations were the
+    root cause of a lost application in the field.
+    """
+    findings = page.evaluate(_OVERLAY_PROBE_JS)
+    # Deduplicate by (kind, text)
+    seen = set()
+    unique = []
+    for f in findings:
+        key = (f["kind"], f["text"])
+        if key not in seen:
+            seen.add(key)
+            unique.append(f)
+    return {
+        "status": "ok",
+        "action": "check",
+        "url": page.url,
+        "blocking": len(unique),
+        "findings": unique,
+    }
+
+
+_STEALTH_PROBES_JS = """() => {
+    const results = [];
+    const add = (name, passed, detail) => results.push({probe: name, pass: !!passed, detail: detail || ''});
+    add('navigator.webdriver', navigator.webdriver === false || navigator.webdriver === undefined,
+        'value=' + String(navigator.webdriver));
+    add('user-agent', !/HeadlessChrome/i.test(navigator.userAgent), navigator.userAgent.slice(0, 120));
+    add('navigator.plugins', navigator.plugins.length > 0, 'count=' + navigator.plugins.length);
+    add('navigator.mimeTypes', navigator.mimeTypes.length > 0, 'count=' + navigator.mimeTypes.length);
+    add('navigator.languages', Array.isArray(navigator.languages) && navigator.languages.length > 0,
+        JSON.stringify(navigator.languages));
+    const hasChrome = typeof window.chrome === 'object' && window.chrome !== null;
+    add('window.chrome', hasChrome);
+    add('chrome.runtime', hasChrome && typeof chrome.runtime !== 'undefined');
+    // WebGL vendor / renderer (SwiftShader = software rendering leak)
+    let glOk = false, glDetail = 'no-webgl';
+    try {
+        const c = document.createElement('canvas');
+        const gl = c.getContext('webgl') || c.getContext('experimental-webgl');
+        if (gl) {
+            const ext = gl.getExtension('WEBGL_debug_renderer_info');
+            const vendor = ext ? gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR);
+            const renderer = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+            glOk = !/SwiftShader|llvmpipe|Software/i.test(String(renderer));
+            glDetail = vendor + ' / ' + renderer;
+        }
+    } catch (e) { glDetail = 'error: ' + e.message; }
+    add('webgl.renderer', glOk, glDetail);
+    // cdc_ variables (chromedriver artifact)
+    const cdc = Object.keys(document).filter(k => /^cdc_|^\\$cdc_/.test(k));
+    add('no-cdc-vars', cdc.length === 0, cdc.join(','));
+    let consoleOk = false;
+    try { consoleOk = /native code/i.test(Function.prototype.toString.call(console.debug)); }
+    catch (e) {}
+    add('console.debug-native', consoleOk);
+    add('notification-api', typeof Notification !== 'undefined');
+    add('hardware-concurrency', navigator.hardwareConcurrency > 0,
+        'cores=' + navigator.hardwareConcurrency);
+    add('device-pixel-ratio', window.devicePixelRatio > 0,
+        'dpr=' + window.devicePixelRatio);
+    return results;
+}"""
+
+
+def cmd_stealth_audit(page: Page, args) -> dict:
+    """Run anti-detection probes against the current browser page."""
+    results = page.evaluate(_STEALTH_PROBES_JS)
+    # Async permission probe: headless Chrome leaks 'prompt' here where a
+    # real Chrome reports 'denied'/'granted' — classic headless tell.
+    try:
+        perm = page.evaluate(
+            """async () => {
+                try {
+                    const st = await navigator.permissions.query({name: 'notifications'});
+                    return st.state;
+                } catch (e) { return 'error: ' + e.message; }
+            }"""
+        )
+        results.append({
+            "probe": "permissions.notifications",
+            "pass": perm in ("granted", "denied"),
+            "detail": perm,
+        })
+    except Exception as e:  # noqa: BLE001
+        results.append({"probe": "permissions.notifications", "pass": False,
+                        "detail": str(e)})
+
+    leaks = [r for r in results if not r["pass"]]
+    return {
+        "status": "ok",
+        "action": "stealth_audit",
+        "url": page.url,
+        "passed": len(results) - len(leaks),
+        "total": len(results),
+        "leaks": leaks,
+        "results": results,
+    }
+
+
+def cmd_doctor(page: Page, args) -> dict:
+    """CDP health check: connectivity, session responsiveness, tab inventory."""
+    start = time.time()
+    pages_info = []
+    for ctx in page.context.browser.contexts:
+        for p in ctx.pages:
+            try:
+                title = p.title()
+                pages_info.append({"url": p.url, "title": title, "responsive": True})
+            except Exception as e:  # noqa: BLE001
+                pages_info.append({"url": p.url, "title": None, "responsive": False,
+                                   "error": str(e)[:120]})
+    latency_ms = round((time.time() - start) * 1000, 1)
+    # Round-trip JS probe
+    js_ok = True
+    try:
+        page.evaluate("1 + 1")
+    except Exception:  # noqa: BLE001
+        js_ok = False
+    healthy = js_ok and all(p["responsive"] for p in pages_info)
+    result = {
+        "status": "ok" if healthy else "degraded",
+        "action": "doctor",
+        "cdp_url": get_cdp_url(),
+        "latency_ms": latency_ms,
+        "js_roundtrip": js_ok,
+        "tabs": pages_info,
+        "healthy": healthy,
+    }
+    if not healthy:
+        result["hint"] = ("CDP session appears corrupted. Restart the browser "
+                          "container/service; profile persists in browser_data/.")
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Human Behavior CDP CLI — human-like browser interactions",
+    )
+    parser.add_argument(
+        "--tab", default=None, metavar="SUBSTR",
+        help="Target the first open tab whose URL contains SUBSTR "
+             "(default: most recently opened tab)",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -391,6 +695,8 @@ def main():
     p_scroll = sub.add_parser("scroll", help="Human scroll with inertia")
     p_scroll.add_argument("--times", type=int, default=3, help="Scroll segments")
     p_scroll.add_argument("--direction", choices=["down", "up"], default="down")
+    p_scroll.add_argument("--container", action="store_true",
+                          help="Auto-detect inner scrollable element and wheel it")
 
     # hover
     p_hover = sub.add_parser("hover", help="Hover over visible links")
@@ -407,6 +713,13 @@ def main():
     p_fill = sub.add_parser("fill", help="Human typing into input")
     p_fill.add_argument("selector", help="CSS selector")
     p_fill.add_argument("text", help="Text to type")
+    p_fill.add_argument("--clear", action="store_true",
+                        help="Select-all + delete before typing")
+
+    # fill_clear
+    p_fc = sub.add_parser("fill_clear", help="Clear field then type (select-all + delete)")
+    p_fc.add_argument("selector", help="CSS selector")
+    p_fc.add_argument("text", help="Text to type")
 
     # navigate
     p_nav = sub.add_parser("navigate", help="Navigate with human sequence")
@@ -458,11 +771,20 @@ def main():
     # input_calib
     sub.add_parser("input_calib", help="Print viewport->screen offset")
 
+    # check
+    sub.add_parser("check", help="Detect blocking overlays (modals, cookie banners, captchas)")
+
+    # doctor
+    sub.add_parser("doctor", help="CDP health check: latency, tab responsiveness")
+
+    # stealth_audit
+    sub.add_parser("stealth_audit", help="Run anti-detection probes against current page")
+
     parsed = parser.parse_args()
 
     pw = None
     try:
-        pw, browser, page = _get_page()
+        pw, browser, page = _get_page(parsed.tab)
 
         cmds = {
             "viewport": cmd_viewport,
@@ -472,6 +794,7 @@ def main():
             "read": cmd_read,
             "warm_up": cmd_warm_up,
             "fill": cmd_fill,
+            "fill_clear": cmd_fill_clear,
             "navigate": cmd_navigate,
             "type_text": cmd_type_text,
             "snapshot": cmd_snapshot,
@@ -484,6 +807,9 @@ def main():
             "a11y_click": cmd_a11y_click,
             "os_click": cmd_os_click,
             "input_calib": cmd_input_calib,
+            "check": cmd_check,
+            "doctor": cmd_doctor,
+            "stealth_audit": cmd_stealth_audit,
         }
 
         result = cmds[parsed.command](page, parsed)
