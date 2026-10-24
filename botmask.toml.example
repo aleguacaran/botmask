@@ -26,9 +26,9 @@ navigation_timeout = 30
 # Implicit wait (seconds)
 implicit_wait = 10
 
-# Human-like delay between actions (seconds)
-human_delay_min = 3.0
-human_delay_max = 8.0
+# Natural delay between actions (seconds)
+delay_min = 3.0
+delay_max = 8.0
 
 # Additional Chromium/Brave arguments (list)
 # Default anti-detection args (always included unless overridden):

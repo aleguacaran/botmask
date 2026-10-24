@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Human Behavior Simulation Module - botmask
+Behavior Simulation Module - botmask
 
-Realistic human behavior simulation for browser automation:
+Realistic behavior simulation for browser automation:
 - Bezier-curve mouse movement
 - Natural scrolling with inertia and acceleration
 - Event-based delays (wait for visibility, not fixed sleeps)
@@ -12,11 +12,11 @@ Realistic human behavior simulation for browser automation:
 - Typing simulation with per-character variance
 
 Usage:
-    from botmask.human_behavior import HumanBehavior
+    from botmask.behavior import Behavior
 
-    hb = HumanBehavior(page)
+    hb = Behavior(page)
     hb.warm_up()
-    hb.human_scroll(times=3)
+    hb.scroll(times=3)
     hb.move_mouse_to(element)
     hb.read_page()
     hb.detect_auth_barrier()
@@ -160,9 +160,9 @@ def _generate_bezier_path(
     return path, length
 
 
-class HumanBehavior:
+class Behavior:
     """
-    Realistic human behavior simulation for browser automation.
+    Realistic behavior simulation for browser automation.
 
     Provides natural mouse movement, scrolling, delays, and
     page interaction patterns that mimic real user behavior
@@ -207,7 +207,7 @@ class HumanBehavior:
 
     def _ensure_in_viewport(self, locator: Locator) -> Optional[dict]:
         """
-        Scroll the element into view with human-like scrolling if needed.
+        Scroll the element into view with natural scrolling if needed.
 
         Gets the element's bounding box and current viewport state.
         If the element is not fully visible, scrolls smoothly to it
@@ -240,8 +240,8 @@ class HumanBehavior:
 
         direction = "down" if delta > 0 else "up"
         segments = max(1, min(20, int(abs(delta) / 400)))
-        self.human_scroll(times=segments, direction=direction)
-        self.human_delay(0.3, 0.8)
+        self.scroll(times=segments, direction=direction)
+        self.pace(0.3, 0.8)
 
         # Re-check position after scroll
         try:
@@ -251,7 +251,7 @@ class HumanBehavior:
 
         return box
 
-    def human_delay(
+    def pace(
         self,
         min_sec: float = 1.0,
         max_sec: float = 3.0,
@@ -291,14 +291,14 @@ class HumanBehavior:
         else:
             self.page.evaluate(f"window.scrollBy(0, {delta})")
 
-    def human_scroll(
+    def scroll(
         self,
         times: int = 3,
         direction: str = "down",
         container_selector: Optional[str] = None,
     ):
         """
-        Scroll with human-like inertia, acceleration, and deceleration.
+        Scroll with natural inertia, acceleration, and deceleration.
 
         Uses window.scrollBy with smooth behavior and variable deltas
         to simulate natural scrolling patterns.
@@ -308,7 +308,7 @@ class HumanBehavior:
             direction: 'down' or 'up'
             container_selector: If set, scroll within this element
         """
-        print(f"  [human] Scrolling {direction} ({times} segments)...", file=sys.stderr)
+        print(f"  [botmask] Scrolling {direction} ({times} segments)...", file=sys.stderr)
 
         delta_sign = 1 if direction == "down" else -1
 
@@ -396,9 +396,9 @@ class HumanBehavior:
             self._trace_path(path)
             self._settle(target_x, target_y)
         else:
-            self._move_mouse_human((target_x, target_y), target_width)
+            self._glide((target_x, target_y), target_width)
 
-    def _move_mouse_human(self, target: Tuple[float, float], target_width: float):
+    def _glide(self, target: Tuple[float, float], target_width: float):
         """Move with Fitts's Law pacing; overshoot-and-correct on long distances."""
         start = self._mouse_pos
         dist = math.hypot(target[0] - start[0], target[1] - start[1])
@@ -439,7 +439,7 @@ class HumanBehavior:
                 time.sleep(delay)
 
     def _settle(self, target_x: float, target_y: float):
-        """Micro-adjustments at target (humans don't land perfectly)."""
+        """Micro-adjustments at target (a real pointer never lands perfectly)."""
         if random.random() < 0.4:
             settle_steps = random.randint(1, 3)
             for _ in range(settle_steps):
@@ -480,7 +480,7 @@ class HumanBehavior:
 
     def read_page(self, sections: int = 3):
         """
-        Simulate a human reading the page content.
+        Simulate natural reading the page content.
 
         Moves mouse to different sections, scrolls between them,
         adds reading pauses, dismisses cookie banners, and
@@ -489,7 +489,7 @@ class HumanBehavior:
         Args:
             sections: Number of reading sections to simulate
         """
-        print(f"  [human] Simulating reading ({sections} sections)...", file=sys.stderr)
+        print(f"  [botmask] Simulating reading ({sections} sections)...", file=sys.stderr)
 
         self.dismiss_cookie_consent()
 
@@ -501,24 +501,24 @@ class HumanBehavior:
             )
 
             self.move_mouse_to(target_x=target_x, target_y=target_y, steps=random.randint(30, 60))
-            self.human_delay(1.5, 4.0, distribution="lognormal")
+            self.pace(1.5, 4.0, distribution="lognormal")
 
             self.idle_wander(random.uniform(0.5, 2.0))
 
             if i < sections - 1:
-                self.human_scroll(times=1)
-                self.human_delay(0.5, 1.5)
+                self.scroll(times=1)
+                self.pace(0.5, 1.5)
 
         self.find_on_page()
 
-    def human_click(
+    def click(
         self,
         locator: Locator,
         pre_move: bool = True,
         hover_pause: bool = True,
     ):
         """
-        Click an element with pre-hover and human timing.
+        Click an element with pre-hover and natural timing.
 
         Real users move the mouse to an element, hover briefly,
         then click. This simulates that full interaction chain.
@@ -534,12 +534,12 @@ class HumanBehavior:
             self.move_mouse_to(locator=locator)
 
         if hover_pause:
-            self.human_delay(0.3, 0.8)
+            self.pace(0.3, 0.8)
 
         locator.click()
-        self.human_delay(0.2, 0.6)
+        self.pace(0.2, 0.6)
 
-    def human_type(
+    def type_text(
         self,
         locator: Locator,
         text: str,
@@ -556,7 +556,7 @@ class HumanBehavior:
         """
         self._ensure_in_viewport(locator)
         locator.click()
-        self.human_delay(0.2, 0.5)
+        self.pace(0.2, 0.5)
 
         i = 0
         while i < len(text):
@@ -567,15 +567,15 @@ class HumanBehavior:
                 if nearby_keys:
                     wrong_char = random.choice(nearby_keys)
                     self.page.keyboard.type(wrong_char, delay=random.randint(30, 80))
-                    self.human_delay(0.15, 0.4)
+                    self.pace(0.15, 0.4)
                     self.page.keyboard.press("Backspace")
-                    self.human_delay(0.1, 0.3)
+                    self.pace(0.1, 0.3)
 
             self.page.keyboard.type(char, delay=random.randint(40, 120))
             i += 1
 
             if random.random() < 0.08:
-                self.human_delay(0.1, 0.5)
+                self.pace(0.1, 0.5)
 
     @staticmethod
     def _nearby_keys(char: str) -> List[str]:
@@ -643,13 +643,13 @@ class HumanBehavior:
                 break
             try:
                 self.move_mouse_to(target_x=c["x"], target_y=c["y"])
-                self.human_delay(0.4, 1.2, distribution="lognormal")
+                self.pace(0.4, 1.2, distribution="lognormal")
                 hovered += 1
             except Exception:
                 continue
 
         if hovered:
-            print(f"  [human] Hovered over {hovered} link(s)/button(s)", file=sys.stderr)
+            print(f"  [botmask] Hovered over {hovered} link(s)/button(s)", file=sys.stderr)
 
     def warm_up(self, sites: Optional[List[dict]] = None):
         """
@@ -668,7 +668,7 @@ class HumanBehavior:
             count = random.randint(3, 5)
             sites = random.sample(WARM_UP_SITES, min(count, len(WARM_UP_SITES)))
 
-        print(f"[human] Browser warm-up: visiting {len(sites)} neutral sites...", file=sys.stderr)
+        print(f"[botmask] Browser warm-up: visiting {len(sites)} neutral sites...", file=sys.stderr)
 
         for site in sites:
             url = site["url"]
@@ -677,19 +677,19 @@ class HumanBehavior:
 
             try:
                 self.page.goto(url, wait_until="domcontentloaded", timeout=15000)
-                self.human_delay(*wait_range, distribution="lognormal")
+                self.pace(*wait_range, distribution="lognormal")
 
                 if interact:
-                    self.human_scroll(times=random.randint(1, 2))
+                    self.scroll(times=random.randint(1, 2))
                     self.hover_over_links(random.randint(2, 4))
                     self.idle_wander(random.uniform(0.5, 1.5))
 
-                print(f"  [human] Warm-up: {url} (waited {wait_range[0]}-{wait_range[1]}s)", file=sys.stderr)
+                print(f"  [botmask] Warm-up: {url} (waited {wait_range[0]}-{wait_range[1]}s)", file=sys.stderr)
 
             except Exception as e:
-                print(f"  [human] Warm-up skip {url}: {e}", file=sys.stderr)
+                print(f"  [botmask] Warm-up skip {url}: {e}", file=sys.stderr)
 
-        self.human_delay(1.0, 2.5)
+        self.pace(1.0, 2.5)
 
     def detect_auth_barrier(self) -> bool:
         """
@@ -707,14 +707,14 @@ class HumanBehavior:
 
         for pattern in AUTH_BARRIER_PATTERNS:
             if pattern in current_url:
-                print(f"  [human] Auth barrier detected in URL: {pattern}", file=sys.stderr)
-                print(f"  [human] Current URL: {self.page.url}", file=sys.stderr)
+                print(f"  [botmask] Auth barrier detected in URL: {pattern}", file=sys.stderr)
+                print(f"  [botmask] Current URL: {self.page.url}", file=sys.stderr)
                 return True
 
         for indicator in AUTH_BARRIER_TITLES:
             if indicator in current_title:
-                print(f"  [human] Auth barrier detected in title: '{indicator}'", file=sys.stderr)
-                print(f"  [human] Current title: {self.page.title()}", file=sys.stderr)
+                print(f"  [botmask] Auth barrier detected in title: '{indicator}'", file=sys.stderr)
+                print(f"  [botmask] Current title: {self.page.title()}", file=sys.stderr)
                 return True
 
         challenge_selectors = [
@@ -730,7 +730,7 @@ class HumanBehavior:
         for selector in challenge_selectors:
             try:
                 if self.page.locator(selector).first.is_visible(timeout=500):
-                    print(f"  [human] Auth barrier detected: challenge element '{selector}'", file=sys.stderr)
+                    print(f"  [botmask] Auth barrier detected: challenge element '{selector}'", file=sys.stderr)
                     return True
             except Exception:
                 continue
@@ -760,14 +760,14 @@ class HumanBehavior:
             page_text = self.page.inner_text("body").lower()
             for indicator in rate_limit_indicators:
                 if indicator in page_text:
-                    print(f"  [human] Rate limit detected: '{indicator}'", file=sys.stderr)
+                    print(f"  [botmask] Rate limit detected: '{indicator}'", file=sys.stderr)
                     return True
         except Exception:
             pass
 
         return False
 
-    def human_navigate(
+    def navigate(
         self,
         url: str,
         wait_until: str = "domcontentloaded",
@@ -775,7 +775,7 @@ class HumanBehavior:
         warm_up: bool = False,
     ):
         """
-        Navigate to a URL with full human behavior sequence.
+        Navigate to a URL with full behavior simulation sequence.
 
         Combines warm-up, navigation, reading simulation, and
         auth barrier detection in a single method call.
@@ -789,9 +789,9 @@ class HumanBehavior:
         if warm_up:
             self.warm_up()
 
-        self.human_delay(1.0, 2.5)
+        self.pace(1.0, 2.5)
         self.page.goto(url, wait_until=wait_until, timeout=timeout)
-        self.human_delay(1.5, 3.5)
+        self.pace(1.5, 3.5)
 
         if self.detect_auth_barrier():
             raise AuthBarrierError(self.page.url)
@@ -832,9 +832,9 @@ class HumanBehavior:
                 btn = self.page.locator(selector).first
                 if btn.is_visible(timeout=1000):
                     self.move_mouse_to(locator=btn)
-                    self.human_delay(0.2, 0.6)
+                    self.pace(0.2, 0.6)
                     btn.click(timeout=2000)
-                    self.human_delay(0.3, 0.8)
+                    self.pace(0.3, 0.8)
                     return
             except Exception:
                 continue
@@ -862,11 +862,11 @@ class HumanBehavior:
 
         try:
             self.page.keyboard.press("Control+f")
-            self.human_delay(0.3, 0.8)
+            self.pace(0.3, 0.8)
             self.page.keyboard.type(word, delay=random.randint(30, 70))
-            self.human_delay(0.5, 1.5)
+            self.pace(0.5, 1.5)
             self.page.keyboard.press("Escape")
-            self.human_delay(0.2, 0.5)
+            self.pace(0.2, 0.5)
         except Exception:
             pass
 
