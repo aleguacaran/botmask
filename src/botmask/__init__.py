@@ -1,1 +1,1 @@
-"""botmask — containerized human-behavior browser automation toolkit."""
+"""botmask — containerized stealth browser automation toolkit."""

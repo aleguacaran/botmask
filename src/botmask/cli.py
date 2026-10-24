@@ -1,40 +1,40 @@
 #!/usr/bin/env python3
 """
-Human Behavior CDP CLI — Human-like browser interactions via CDP.
+botmask CLI — natural browser interactions via CDP.
 
 Connects to the shared Brave CDP instance for all browser interactions.
-Human-like commands (click, scroll, fill, hover, read, warm_up, navigate)
-use the HumanBehavior class. Inspection commands (snapshot, eval,
+Interaction commands (click, scroll, fill, hover, read, warm_up, navigate)
+use the Behavior class. Inspection commands (snapshot, eval,
 list_pages, viewport) use direct CDP access. AI targeting commands
 (a11y, a11y_click, os_click, input_calib) use the interaction-model modules.
 
 Usage:
-    python -m botmask.human_cdp [--tab URL_SUBSTR] COMMAND ...
+    python -m botmask.cli [--tab URL_SUBSTR] COMMAND ...
 
-    python -m botmask.human_cdp click       "h2#Enlaces_externos"
-    python -m botmask.human_cdp scroll      --times 3 --direction down
-    python -m botmask.human_cdp scroll      --container          (inner scroller)
-    python -m botmask.human_cdp hover       --count 4
-    python -m botmask.human_cdp read        --sections 3
-    python -m botmask.human_cdp warm_up
-    python -m botmask.human_cdp viewport
-    python -m botmask.human_cdp fill        "#input-id" "text to type"
-    python -m botmask.human_cdp fill        "#input-id" "text" --clear
-    python -m botmask.human_cdp fill_clear  "#input-id" "replacement text"
-    python -m botmask.human_cdp navigate    "https://example.com"
-    python -m botmask.human_cdp type_text   "#search" "python developer"
-    python -m botmask.human_cdp snapshot    [--filePath /tmp/snapshot.txt]
-    python -m botmask.human_cdp eval        "document.title"
-    python -m botmask.human_cdp list_pages
-    python -m botmask.human_cdp new_page    "https://example.com"
-    python -m botmask.human_cdp screenshot  [--filePath /tmp/shot.png]
-    python -m botmask.human_cdp check                            (overlays/modals)
-    python -m botmask.human_cdp doctor                           (CDP health)
-    python -m botmask.human_cdp stealth_audit                    (detection probes)
-    python -m botmask.human_cdp a11y        [--limit 300]
-    python -m botmask.human_cdp a11y_click 42
-    python -m botmask.human_cdp os_click    42
-    python -m botmask.human_cdp input_calib
+    python -m botmask.cli click       "h2#Enlaces_externos"
+    python -m botmask.cli scroll      --times 3 --direction down
+    python -m botmask.cli scroll      --container          (inner scroller)
+    python -m botmask.cli hover       --count 4
+    python -m botmask.cli read        --sections 3
+    python -m botmask.cli warm_up
+    python -m botmask.cli viewport
+    python -m botmask.cli fill        "#input-id" "text to type"
+    python -m botmask.cli fill        "#input-id" "text" --clear
+    python -m botmask.cli fill_clear  "#input-id" "replacement text"
+    python -m botmask.cli navigate    "https://example.com"
+    python -m botmask.cli type_text   "#search" "python developer"
+    python -m botmask.cli snapshot    [--filePath /tmp/snapshot.txt]
+    python -m botmask.cli eval        "document.title"
+    python -m botmask.cli list_pages
+    python -m botmask.cli new_page    "https://example.com"
+    python -m botmask.cli screenshot  [--filePath /tmp/shot.png]
+    python -m botmask.cli check                            (overlays/modals)
+    python -m botmask.cli doctor                           (CDP health)
+    python -m botmask.cli stealth_audit                    (detection probes)
+    python -m botmask.cli a11y        [--limit 300]
+    python -m botmask.cli a11y_click 42
+    python -m botmask.cli os_click    42
+    python -m botmask.cli input_calib
 
 Output: JSON with {status, action, message, ...} for machine parsing.
 """
@@ -49,7 +49,7 @@ from patchright.sync_api import sync_playwright, Page
 
 from botmask.a11y import resolve_target, snapshot_interactives
 from botmask.config import get_cdp_url
-from botmask.human_behavior import HumanBehavior
+from botmask.behavior import Behavior
 from botmask.input_os import calibrate, click_locator
 
 
@@ -107,10 +107,10 @@ def cmd_viewport(page: Page, args) -> dict:
 
 
 def cmd_click(page: Page, args) -> dict:
-    """Human click: viewport check → scroll → Bezier hover → click."""
-    hb = HumanBehavior(page)
+    """Natural click: viewport check → scroll → Bezier hover → click."""
+    hb = Behavior(page)
     locator = page.locator(args.selector)
-    hb.human_click(locator)
+    hb.click(locator)
     return {
         "status": "ok",
         "action": "click",
@@ -120,9 +120,9 @@ def cmd_click(page: Page, args) -> dict:
 
 
 def cmd_scroll(page: Page, args) -> dict:
-    """Human scroll with inertia, multi-segment."""
-    hb = HumanBehavior(page)
-    hb.human_scroll(times=args.times, direction=args.direction)
+    """Natural scroll with inertia, multi-segment."""
+    hb = Behavior(page)
+    hb.scroll(times=args.times, direction=args.direction)
     return {
         "status": "ok",
         "action": "scroll",
@@ -133,28 +133,28 @@ def cmd_scroll(page: Page, args) -> dict:
 
 def cmd_hover(page: Page, args) -> dict:
     """Hover over visible links/buttons in viewport."""
-    hb = HumanBehavior(page)
+    hb = Behavior(page)
     hb.hover_over_links(count=args.count)
     return {"status": "ok", "action": "hover", "count": args.count}
 
 
 def cmd_read(page: Page, args) -> dict:
     """Simulate reading: scroll, hover, find-on-page."""
-    hb = HumanBehavior(page)
+    hb = Behavior(page)
     hb.read_page(sections=args.sections)
     return {"status": "ok", "action": "read", "sections": args.sections}
 
 
 def cmd_warm_up(page: Page, args) -> dict:
     """Warm-up browser on neutral sites."""
-    hb = HumanBehavior(page)
+    hb = Behavior(page)
     hb.warm_up()
     return {"status": "ok", "action": "warm_up"}
 
 
 def cmd_fill(page: Page, args) -> dict:
-    """Fill input with human-like typing."""
-    hb = HumanBehavior(page)
+    """Fill input with natural typing."""
+    hb = Behavior(page)
     locator = page.locator(args.selector)
     if getattr(args, "clear", False):
         # Select-all + delete before typing (fill appends, never clears)
@@ -164,7 +164,7 @@ def cmd_fill(page: Page, args) -> dict:
         time.sleep(random.uniform(0.1, 0.2))
         page.keyboard.press("Delete")
         time.sleep(random.uniform(0.2, 0.4))
-    hb.human_type(locator, args.text)
+    hb.type_text(locator, args.text)
     return {
         "status": "ok",
         "action": "fill",
@@ -174,8 +174,8 @@ def cmd_fill(page: Page, args) -> dict:
 
 
 def cmd_fill_clear(page: Page, args) -> dict:
-    """Clear the field (select-all + delete) then type with human cadence."""
-    hb = HumanBehavior(page)
+    """Clear the field (select-all + delete) then type with natural cadence."""
+    hb = Behavior(page)
     locator = page.locator(args.selector)
     locator.click()
     time.sleep(random.uniform(0.2, 0.4))
@@ -183,7 +183,7 @@ def cmd_fill_clear(page: Page, args) -> dict:
     time.sleep(random.uniform(0.1, 0.25))
     page.keyboard.press("Delete")
     time.sleep(random.uniform(0.2, 0.4))
-    hb.human_type(locator, args.text)
+    hb.type_text(locator, args.text)
     return {
         "status": "ok",
         "action": "fill_clear",
@@ -192,12 +192,12 @@ def cmd_fill_clear(page: Page, args) -> dict:
 
 
 def cmd_scroll(page: Page, args) -> dict:
-    """Human scroll with inertia, multi-segment.
+    """Natural scroll with inertia, multi-segment.
 
     With ``--container``, auto-detect the inner scrollable element (e.g.
     LinkedIn's results panel) and wheel-scroll it instead of the window.
     """
-    hb = HumanBehavior(page)
+    hb = Behavior(page)
     if getattr(args, "container", False):
         dy = 600 if args.direction == "down" else -600
         for _ in range(args.times):
@@ -215,7 +215,7 @@ def cmd_scroll(page: Page, args) -> dict:
                 const el = scrollers[0];
                 const before = el.scrollTop;
                 const r = el.getBoundingClientRect();
-                // Human-ish wheel over the container center
+                // Natural wheel over the container center
                 const cx = r.left + r.width / 2;
                 const cy = r.top + Math.min(r.height / 2, window.innerHeight / 2);
                 return {before, canScroll: el.scrollHeight - el.clientHeight - el.scrollTop > 2, cx, cy};
@@ -233,7 +233,7 @@ def cmd_scroll(page: Page, args) -> dict:
             "times": args.times,
             "direction": args.direction,
         }
-    hb.human_scroll(times=args.times, direction=args.direction)
+    hb.scroll(times=args.times, direction=args.direction)
     return {
         "status": "ok",
         "action": "scroll",
@@ -243,9 +243,9 @@ def cmd_scroll(page: Page, args) -> dict:
 
 
 def cmd_navigate(page: Page, args) -> dict:
-    """Navigate to URL with human-like sequence."""
-    hb = HumanBehavior(page)
-    hb.human_navigate(url=args.url, warm_up=args.warm_up)
+    """Navigate to URL with natural sequence."""
+    hb = Behavior(page)
+    hb.navigate(url=args.url, warm_up=args.warm_up)
     return {
         "status": "ok",
         "action": "navigate",
@@ -368,7 +368,7 @@ def cmd_eval(page: Page, args) -> dict:
 
 def cmd_screenshot(page: Page, args) -> dict:
     """Take a screenshot of the current viewport."""
-    path = getattr(args, "filePath", None) or "/tmp/human_cdp_screenshot.png"
+    path = getattr(args, "filePath", None) or "/tmp/botmask_screenshot.png"
     page.screenshot(path=path, full_page=getattr(args, "full_page", False))
     return {"status": "ok", "action": "screenshot", "filePath": path}
 
@@ -441,10 +441,10 @@ def _resolve_index(page: Page, index: int):
 
 
 def cmd_a11y_click(page: Page, args) -> dict:
-    """Human CDP click on snapshot index (recommended path)."""
+    """Natural CDP click on snapshot index (recommended path)."""
     target = _resolve_index(page, args.index)
-    hb = HumanBehavior(page)
-    hb.human_click(target["locator"])
+    hb = Behavior(page)
+    hb.click(target["locator"])
     return {
         "status": "ok",
         "action": "a11y_click",
@@ -523,7 +523,7 @@ _OVERLAY_PROBE_JS = """() => {
             });
         }
     });
-    // Captcha challenges (need human)
+    // Captcha challenges (must be solved by the operator)
     document.querySelectorAll('iframe[src*="recaptcha"], iframe[title*="recaptcha" i], .g-recaptcha, .h-captcha')
         .forEach(el => {
             findings.push({
@@ -675,7 +675,7 @@ def cmd_doctor(page: Page, args) -> dict:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Human Behavior CDP CLI — human-like browser interactions",
+        description="botmask CLI — natural browser interactions",
     )
     parser.add_argument(
         "--tab", default=None, metavar="SUBSTR",
@@ -688,11 +688,11 @@ def main():
     sub.add_parser("viewport", help="Get current viewport state")
 
     # click
-    p_click = sub.add_parser("click", help="Human click with viewport check + scroll")
+    p_click = sub.add_parser("click", help="Natural click with viewport check + scroll")
     p_click.add_argument("selector", help="CSS selector for element")
 
     # scroll
-    p_scroll = sub.add_parser("scroll", help="Human scroll with inertia")
+    p_scroll = sub.add_parser("scroll", help="Natural scroll with inertia")
     p_scroll.add_argument("--times", type=int, default=3, help="Scroll segments")
     p_scroll.add_argument("--direction", choices=["down", "up"], default="down")
     p_scroll.add_argument("--container", action="store_true",
@@ -710,7 +710,7 @@ def main():
     sub.add_parser("warm_up", help="Warm-up on neutral sites")
 
     # fill
-    p_fill = sub.add_parser("fill", help="Human typing into input")
+    p_fill = sub.add_parser("fill", help="Natural typing into input")
     p_fill.add_argument("selector", help="CSS selector")
     p_fill.add_argument("text", help="Text to type")
     p_fill.add_argument("--clear", action="store_true",
@@ -722,7 +722,7 @@ def main():
     p_fc.add_argument("text", help="Text to type")
 
     # navigate
-    p_nav = sub.add_parser("navigate", help="Navigate with human sequence")
+    p_nav = sub.add_parser("navigate", help="Navigate with natural sequence")
     p_nav.add_argument("url", help="Target URL")
     p_nav.add_argument("--warm-up", action="store_true", help="Warm-up first")
 
@@ -761,7 +761,7 @@ def main():
     p_a11y.add_argument("--limit", type=int, default=300, help="Max entries")
 
     # a11y_click
-    p_ac = sub.add_parser("a11y_click", help="Human CDP click on snapshot index")
+    p_ac = sub.add_parser("a11y_click", help="Natural CDP click on snapshot index")
     p_ac.add_argument("index", type=int, help="Snapshot index to click")
 
     # os_click

@@ -6,10 +6,10 @@ Launches its own Brave instance via Patchright, so it does NOT depend on
 start.sh or a pre-running CDP server. Exercises every public module:
 
   1. config — load config, context options, BrowserForge headers
-  2. human_behavior — Bezier mouse, scroll, type, click, detect barriers
+  2. behavior — Bezier mouse, scroll, type, click, detect barriers
   3. a11y — snapshot interactive elements, resolve index → locator
   4. input_os — calibrate viewport → screen offset
-  5. human_cdp — CLI end-to-end (a11y snapshot, screenshot)
+  5. cli — CLI end-to-end (a11y snapshot, screenshot)
 
 Run inside the container:
     docker compose run --rm --entrypoint bash app \
@@ -85,13 +85,13 @@ check("get_context_options", test_context_options)
 check("get_browserforge_headers", test_browserforge)
 print()
 
-# ── 2. Launch Brave + human_behavior ─────────────────────────────────────────
+# ── 2. Launch Brave + behavior ─────────────────────────────────────────
 print("=" * 60)
-print("[2/5] Launch Brave + human_behavior module")
+print("[2/5] Launch Brave + behavior module")
 print("=" * 60)
 
 from patchright.sync_api import sync_playwright
-from botmask.human_behavior import HumanBehavior, AuthBarrierError, RateLimitError
+from botmask.behavior import Behavior, AuthBarrierError, RateLimitError
 from botmask.config import get_browser_config, get_browser_args
 
 cfg = get_browser_config()
@@ -113,39 +113,39 @@ context = browser.new_context(
 page = context.new_page()
 print(f"  Page ready: {page.url}")
 
-def test_human_delay():
-    hb = HumanBehavior(page)
+def test_pace():
+    sim = Behavior(page)
     t0 = time.time()
-    hb.human_delay(0.1, 0.2)
+    sim.pace(0.1, 0.2)
     elapsed = time.time() - t0
     assert 0.05 < elapsed < 1.0, f"delay was {elapsed:.2f}s"
-    print(f"    Pace multiplier: {hb.pace_multiplier}")
+    print(f"    Pace multiplier: {sim.pace_multiplier}")
 
 def test_mouse_move():
     page.goto("https://example.com", wait_until="domcontentloaded", timeout=15000)
     time.sleep(0.5)
-    hb = HumanBehavior(page)
-    hb.move_mouse_to(target_x=400, target_y=300, steps=30)
-    assert hb._mouse_pos is not None
+    sim = Behavior(page)
+    sim.move_mouse_to(target_x=400, target_y=300, steps=30)
+    assert sim._mouse_pos is not None
 
-def test_human_scroll():
-    hb = HumanBehavior(page)
-    hb.human_scroll(times=1, direction="down")
+def test_scroll():
+    sim = Behavior(page)
+    sim.scroll(times=1, direction="down")
 
-def test_human_click():
-    hb = HumanBehavior(page)
+def test_click():
+    sim = Behavior(page)
     locator = page.locator("h1")
-    hb.human_click(locator)
+    sim.click(locator)
 
 def test_detect_barriers():
-    hb = HumanBehavior(page)
-    assert hb.detect_auth_barrier() is False
-    assert hb.detect_rate_limit() is False
+    sim = Behavior(page)
+    assert sim.detect_auth_barrier() is False
+    assert sim.detect_rate_limit() is False
 
-check("human_delay", test_human_delay)
+check("pace", test_pace)
 check("move_mouse_to (Bezier)", test_mouse_move)
-check("human_scroll (inertia)", test_human_scroll)
-check("human_click", test_human_click)
+check("scroll (inertia)", test_scroll)
+check("click", test_click)
 check("detect_auth_barrier / detect_rate_limit", test_detect_barriers)
 print()
 
@@ -203,12 +203,12 @@ def test_calibrate():
 check("calibrate", test_calibrate)
 print()
 
-# ── 5. human_cdp CLI ─────────────────────────────────────────────────────────
+# ── 5. cli CLI ─────────────────────────────────────────────────────────
 print("=" * 60)
-print("[5/5] human_cdp CLI (import + dispatch)")
+print("[5/5] cli CLI (import + dispatch)")
 print("=" * 60)
 
-from botmask.human_cdp import cmd_a11y, cmd_screenshot, cmd_viewport
+from botmask.cli import cmd_a11y, cmd_screenshot, cmd_viewport
 import argparse
 
 def test_cmd_a11y():

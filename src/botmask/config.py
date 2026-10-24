@@ -2,7 +2,7 @@
 """
 Browser Configuration Module - botmask
 
-Centralized browser configuration for the humanized browser automation toolkit.
+Centralized browser configuration for the botmask automation toolkit.
 All browser options are sourced from TOML config or built-in defaults.
 
 Usage:
@@ -81,7 +81,7 @@ def get_browser_config() -> dict:
     - ``wayland_display``  — Wayland display socket name
       (e.g. ``wayland-0``)
 
-    All other keys (browser paths, profile, timeouts, human delays, cdp
+    All other keys (browser paths, profile, timeouts, delays, cdp
     settings, etc.) are driven exclusively by the TOML file or the project
     built‑in defaults.
 
@@ -114,8 +114,8 @@ def get_browser_config() -> dict:
         "longitude": -66.9036,
         "navigation_timeout": 30,
         "implicit_wait": 10,
-        "human_delay_min": 1.0,
-        "human_delay_max": 3.0,
+        "delay_min": 1.0,
+        "delay_max": 3.0,
     }
     for k, v in defaults.items():
         merged.setdefault(k, v)

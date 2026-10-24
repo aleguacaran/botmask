@@ -1,10 +1,10 @@
 # botmask
 
-> Containerized human-behavior browser automation toolkit. Installable as a plugin in other projects that need browser automation while evading anti-bot systems.
+> Containerized stealth browser automation toolkit. Installable as a plugin in other projects that need browser automation while evading anti-bot systems.
 
 ## What is this?
 
-A reusable, containerized browser-automation kit that simulates realistic human behavior
+A reusable, containerized browser-automation kit that simulates realistic user behavior
 (Bezier-curve mouse movement, inertia scrolling, natural delays, typo typing, warm-up
 sessions, reading simulation, auth-barrier detection) on top of **Brave Browser + Patchright**.
 
@@ -18,7 +18,7 @@ package so it can be dropped into any project that needs stealthy browser intera
 | Runtime | Docker / Docker Compose |
 | Browser | **Brave** (Chromium; ad-blocking, anti-fingerprinting) |
 | Automation | **Patchright** (undetectable Playwright fork, CDP) |
-| Human behavior | `human_behavior` module (this project) |
+| Behavior simulation | `behavior` module (this project) |
 | Config | `config` module, TOML + defaults |
 | Hardening | BrowserForge headers (planned), OS-level input fallback (planned) |
 
@@ -30,7 +30,7 @@ OS-level input (Xvfb + xdotool/PyAutoGUI) + graceful challenge detection.
 
 See **`docs/interaction-model.md`**. Short version: the AI picks elements from a numbered
 accessibility tree (never pixel coordinates); the script resolves element → bounding box →
-humanized mouse path. OS-level input maps viewport → screen coords via a one-time window
+natural mouse path. OS-level input maps viewport → screen coords via a one-time window
 offset calibration.
 
 ## Container usage
@@ -70,7 +70,7 @@ runtime (`pip install .` + `patchright install chromium`), cached in the `cache`
 - **Phase 0 — Evaluation: COMPLETE** → `docs/decision.md`
 - **Phase 1 — Package extraction & container scaffold: IN PROGRESS**
   - `config.py` migrated ✅ · Dockerfile (develop/deploy) + compose + start.sh scaffolded ✅
-  - Fitts + overshoot mouse port ⏳ · `human_behavior.py` migration ⏳ (see `TODO.md`)
+  - Fitts + overshoot mouse port ⏳ · `behavior.py` migration ⏳ (see `TODO.md`)
 
 ## Docker targets (multistage)
 
