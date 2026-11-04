@@ -52,12 +52,25 @@ from botmask.config import get_cdp_url
 from botmask.behavior import Behavior
 from botmask.input_os import calibrate, click_locator
 
+SESSION_TITLE = "botmask-session"
+_created_pages: set = set()
+
+
+def _is_session_page(page: Page) -> bool:
+    try:
+        return SESSION_TITLE in (page.title() or "")
+    except Exception:  # noqa: BLE001
+        return False
+
 
 def _get_page(tab_filter: str | None = None) -> tuple:
     """Connect to CDP and return (playwright, browser, page).
 
     When ``tab_filter`` is given, pick the first open tab whose URL contains
-    it (case-insensitive). Without it, use the most recently opened tab.
+    it (case-insensitive). Without it, reuse a tab titled ``botmask-session``
+    if one exists, otherwise create one and mark it as the session tab so the
+    next invocation reuses it. This keeps the container's tab count bounded
+    instead of growing one tab per CLI call.
     """
     cdp_url = get_cdp_url()
     pw = sync_playwright().start()
@@ -79,13 +92,26 @@ def _get_page(tab_filter: str | None = None) -> tuple:
                 f"No tab matching '{tab_filter}'. Open tabs: {available}"
             )
     else:
+        # Reuse an existing session tab first.
         for ctx in browser.contexts:
-            if ctx.pages:
-                page = ctx.pages[-1]
+            for p in ctx.pages:
+                if _is_session_page(p):
+                    page = p
+                    break
+            if page:
                 break
+
+        if not page:
+            page = browser.new_page()
+            try:
+                page.evaluate("() => { document.title = 'botmask-session'; }")
+            except Exception:  # noqa: BLE001
+                pass
+            _created_pages.add(page)
 
     if not page:
         page = browser.new_page()
+        _created_pages.add(page)
 
     return pw, browser, page
 
@@ -405,12 +431,17 @@ def cmd_set_input_files(page: Page, args) -> dict:
 
 
 def cmd_new_page(page: Page, args) -> dict:
-    """Open a new page and optionally navigate."""
+    """Open a new page and optionally navigate.
+
+    The new page is tracked so it can be reclaimed at process exit unless it
+    is promoted to the session tab.
+    """
     ctx = None
     for c in page.context.browser.contexts:
         ctx = c
         break
     new_p = ctx.new_page()
+    _created_pages.add(new_p)
     if args.url:
         new_p.goto(args.url, wait_until="domcontentloaded")
     return {
@@ -820,6 +851,17 @@ def main():
         sys.exit(1)
     finally:
         if pw:
+            # Reclaim every page this process created except the persistent
+            # session tab so the container's tab count stays bounded across
+            # repeated CLI invocations.
+            for p in list(_created_pages):
+                if _is_session_page(p):
+                    continue
+                try:
+                    p.close()
+                except Exception:  # noqa: BLE001
+                    pass
+            _created_pages.clear()
             pw.stop()
 
 
