@@ -17,6 +17,7 @@ RUN apt install -y --no-install-recommends \
     xdg-utils \
     libnss3-tools \
     libavcodec-extra \
+    libegl1 \
     socat \
     2>&1
 
