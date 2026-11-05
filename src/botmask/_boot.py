@@ -10,10 +10,39 @@ import os
 import signal
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 # Ensure package is importable when run directly
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "src"))
+
+
+def _in_container() -> bool:
+    """True when running inside a container (Docker/containerd/podman/k8s)."""
+    if Path("/.dockerenv").exists():
+        return True
+    try:
+        cgroup = Path("/proc/1/cgroup").read_text()
+    except OSError:
+        return False
+    return any(k in cgroup for k in ("docker", "containerd", "kubepods", "libpod"))
+
+
+def _resolve_relay(relay_setting: str, cdp_port: str) -> tuple[bool, str]:
+    """Decide whether the CDP relay runs and on which port.
+
+    ``auto`` (default): relay only inside containers — the loopback-only CDP
+    bind is a barrier there, while a bare-metal consumer on the same host
+    reaches 127.0.0.1 directly and may not even have socat installed.
+    A port number forces the relay on; ``off`` disables it.
+    """
+    setting = relay_setting.strip().lower()
+    default_port = str(int(cdp_port) + 1)
+    if setting in ("off", "no", "0"):
+        return False, default_port
+    if setting in ("auto", ""):
+        return _in_container(), default_port
+    return True, setting if setting.isdigit() else default_port
 
 
 def main():
@@ -46,6 +75,9 @@ def main():
 
     cdp_port = os.getenv("BROWSER_CDP_PORT", "9222")
     cdp_host = os.getenv("BROWSER_CDP_HOST", "0.0.0.0")
+    relay_on, relay_port = _resolve_relay(
+        os.getenv("BOTMASK_CDP_RELAY_PORT", "auto"), cdp_port
+    )
 
     cmd = [cfg["executable_path"]] + args + [
         f"--remote-debugging-port={cdp_port}",
@@ -54,18 +86,66 @@ def main():
     ]
 
     proc = subprocess.Popen(cmd)
-    print(f"[botmask] Brave launched (pid={proc.pid}), CDP on {cdp_host}:{cdp_port}",
+    print(f"[botmask] Brave launched (pid={proc.pid}), CDP on 127.0.0.1:{cdp_port} "
+          f"(Brave ignores --remote-debugging-address; loopback only)",
           flush=True)
 
-    # Forward signals to Brave so docker stop works cleanly
-    signal.signal(signal.SIGTERM, lambda *_: proc.terminate())
-    signal.signal(signal.SIGINT, lambda *_: proc.terminate())
+    # Forward signals to both children so docker stop works cleanly
+    relay: subprocess.Popen | None = None
+
+    def _shutdown(*_):
+        proc.terminate()
+        if relay:
+            relay.terminate()
+
+    signal.signal(signal.SIGTERM, _shutdown)
+    signal.signal(signal.SIGINT, _shutdown)
+
+    # Brave ignores --remote-debugging-address and binds CDP to 127.0.0.1 ONLY,
+    # so other containers/hosts cannot reach it through a published port. Relay
+    # the CDP endpoint on 0.0.0.0:<relay_port> so consumers work cross-container.
+    # auto: only inside containers (bare metal reaches loopback directly).
+    if relay_on:
+        try:
+            import urllib.request
+
+            for _ in range(60):
+                try:
+                    urllib.request.urlopen(
+                        f"http://127.0.0.1:{cdp_port}/json/version", timeout=1
+                    )
+                    break
+                except Exception:  # noqa: BLE001
+                    time.sleep(1)
+            relay = subprocess.Popen([
+                "socat",
+                f"TCP-LISTEN:{relay_port},reuseaddr,fork",
+                f"TCP:127.0.0.1:{cdp_port}",
+            ])
+            print(f"[botmask] CDP relay on 0.0.0.0:{relay_port} -> 127.0.0.1:{cdp_port}. "
+                  f"Cross-container/host consumers connect via IP:{relay_port} "
+                  f"(not the DNS name — Brave rejects non-IP Host headers)",
+                  flush=True)
+        except FileNotFoundError:
+            print(f"[botmask] ERROR: socat not found — the CDP relay on "
+                  f"{relay_port} could not start. Other containers cannot reach "
+                  f"this browser; install socat or set BOTMASK_CDP_RELAY_PORT=off.",
+                  file=sys.stderr)
+    else:
+        print(f"[botmask] CDP relay skipped (BOTMASK_CDP_RELAY_PORT="
+              f"{os.getenv('BOTMASK_CDP_RELAY_PORT', 'auto')}); "
+              f"CDP reachable at 127.0.0.1:{cdp_port} from this host only.",
+              flush=True)
 
     try:
-        sys.exit(proc.wait())
+        code = proc.wait()
     except KeyboardInterrupt:
         proc.terminate()
-        sys.exit(0)
+        code = 0
+    finally:
+        if relay:
+            relay.terminate()
+    sys.exit(code)
 
 
 if __name__ == "__main__":

@@ -81,6 +81,35 @@ runtime (`pip install .` + `patchright install chromium`), cached in the `cache`
 
 Base image is Debian `python:slim` — Brave requires glibc and cannot run on Alpine/musl.
 
+## CDP access — the relay (cross-container/host consumers)
+
+Brave **ignores** `--remote-debugging-address` and binds CDP to `127.0.0.1` only — a
+published `9222:9222` port does **not** expose it to other containers or the host.
+On boot, `_boot.py` therefore opens a relay:
+
+```
+0.0.0.0:<CDP_PORT+1>  ->  127.0.0.1:<CDP_PORT>     # default 9223 -> 9222
+```
+
+Verified live: from another container, `curl http://<browser-ip>:9223/json/version`
+responds, while `:9222` directly is refused.
+
+Two rules for consumers:
+
+- **Connect via the browser container's IP**, not its compose DNS name. Brave's
+  DevTools endpoint rejects requests whose `Host` header is not an IP or
+  `localhost` (DNS-rebinding protection) — `http://browser:9223` returns
+  `403 Host header is specified...`, `http://<ip>:9223` works.
+- Same-container consumers (agent and browser in one container) just use
+  `127.0.0.1:9223` — or `127.0.0.1:9222` directly, no relay needed.
+
+Env knob `BOTMASK_CDP_RELAY_PORT`:
+- `auto` (default) — relay only inside containers, where the loopback-only bind
+  blocks cross-container access. On bare metal the consumer reaches
+  `127.0.0.1:9222` directly and socat may not even be installed, so it is skipped.
+- `<port>` — force the relay on that port, in any environment.
+- `off` — never relay.
+
 ## Migration guide
 
 See `docs/migration.md` for historical migration notes.
