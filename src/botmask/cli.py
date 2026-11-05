@@ -8,6 +8,11 @@ use the Behavior class. Inspection commands (snapshot, eval,
 list_pages, viewport) use direct CDP access. AI targeting commands
 (a11y, a11y_click, os_click, input_calib) use the interaction-model modules.
 
+Tab model:
+    Default tab is ephemeral (Brave closes it when the command exits — tab
+    count stays flat). For multi-step flows: open a durable tab once with
+    new_page, target it with --tab <substr>, reclaim it with close_tab.
+
 Usage:
     python -m botmask.cli [--tab URL_SUBSTR] COMMAND ...
 
@@ -26,7 +31,8 @@ Usage:
     python -m botmask.cli snapshot    [--filePath /tmp/snapshot.txt]
     python -m botmask.cli eval        "document.title"
     python -m botmask.cli list_pages
-    python -m botmask.cli new_page    "https://example.com"
+    python -m botmask.cli new_page    "https://example.com"   (durable tab)
+    python -m botmask.cli close_tab   "example.com"           (reclaim it)
     python -m botmask.cli screenshot  [--filePath /tmp/shot.png]
     python -m botmask.cli check                            (overlays/modals)
     python -m botmask.cli doctor                           (CDP health)
@@ -52,15 +58,26 @@ from botmask.config import get_cdp_url
 from botmask.behavior import Behavior
 from botmask.input_os import calibrate, click_locator
 
-SESSION_TITLE = "botmask-session"
-_created_pages: set = set()
+# Default tab model (verified live against Brave + Patchright):
+#   - ``browser.new_page()`` pages belong to the Playwright connection and
+#     Brave CLOSES them when it detaches — which happens at every CLI exit.
+#     So the default tab is ephemeral by design: zero tab growth across
+#     invocations, at the cost of not surviving between commands.
+#   - ``Target.createTarget`` targets are browser-level and DO survive, but
+#     they never appear in ``browser.contexts[].pages``, so Playwright cannot
+#     operate on them. They are therefore only used by ``new_page`` (create
+#     + navigate via CDP) and reclaimed with ``close_tab``.
+# Multi-step CLI workflows: ``new_page <url>`` once, then ``--tab <substr>``
+# on every later command, ``close_tab <substr>`` when done.
 
 
-def _is_session_page(page: Page) -> bool:
+def _cdp_create_target(browser, url: str = "about:blank") -> str:
+    """Create a browser-level tab that survives this process (no Page handle)."""
+    conn = browser.new_browser_cdp_session()
     try:
-        return SESSION_TITLE in (page.title() or "")
-    except Exception:  # noqa: BLE001
-        return False
+        return conn.send("Target.createTarget", {"url": url})["targetId"]
+    finally:
+        conn.detach()
 
 
 def _get_page(tab_filter: str | None = None) -> tuple:
@@ -77,41 +94,23 @@ def _get_page(tab_filter: str | None = None) -> tuple:
     browser = pw.chromium.connect_over_cdp(cdp_url)
 
     page = None
+    all_pages = [p for ctx in browser.contexts for p in ctx.pages]
+
     if tab_filter:
         needle = tab_filter.lower()
-        for ctx in browser.contexts:
-            for p in ctx.pages:
-                if needle in p.url.lower():
-                    page = p
-                    break
-            if page:
+        for p in all_pages:
+            if needle in p.url.lower():
+                page = p
                 break
         if not page:
-            available = [p.url for c in browser.contexts for p in c.pages]
+            available = [p.url for p in all_pages]
             raise ValueError(
                 f"No tab matching '{tab_filter}'. Open tabs: {available}"
             )
     else:
-        # Reuse an existing session tab first.
-        for ctx in browser.contexts:
-            for p in ctx.pages:
-                if _is_session_page(p):
-                    page = p
-                    break
-            if page:
-                break
-
-        if not page:
-            page = browser.new_page()
-            try:
-                page.evaluate("() => { document.title = 'botmask-session'; }")
-            except Exception:  # noqa: BLE001
-                pass
-            _created_pages.add(page)
-
-    if not page:
+        # Ephemeral default tab: closed by Brave when this process exits,
+        # which keeps the container's tab count flat across invocations.
         page = browser.new_page()
-        _created_pages.add(page)
 
     return pw, browser, page
 
@@ -431,24 +430,53 @@ def cmd_set_input_files(page: Page, args) -> dict:
 
 
 def cmd_new_page(page: Page, args) -> dict:
-    """Open a new page and optionally navigate.
+    """Open a durable tab (browser-level CDP target) and optionally navigate.
 
-    The new page is tracked so it can be reclaimed at process exit unless it
-    is promoted to the session tab.
+    The tab survives this process; target it later with ``--tab <substr>``
+    and reclaim it with ``close_tab``.
     """
-    ctx = None
-    for c in page.context.browser.contexts:
-        ctx = c
-        break
-    new_p = ctx.new_page()
-    _created_pages.add(new_p)
-    if args.url:
-        new_p.goto(args.url, wait_until="domcontentloaded")
-    return {
-        "status": "ok",
-        "action": "new_page",
-        "url": args.url,
-    }
+    browser = page.context.browser
+    try:
+        target_id = _cdp_create_target(browser, args.url or "about:blank")
+        return {
+            "status": "ok",
+            "action": "new_page",
+            "url": args.url,
+            "target": target_id[:8],
+            "durable": True,
+        }
+    except Exception as e:  # noqa: BLE001
+        return {"status": "error", "action": "new_page", "error": str(e)}
+
+
+def cmd_close_tab(page: Page, args) -> dict:
+    """Close open tabs whose URL contains the given substring (CDP-level)."""
+    browser = page.context.browser
+    conn = browser.new_browser_cdp_session()
+    try:
+        targets = conn.send("Target.getTargets", {}).get("targetInfos", [])
+        needle = args.substring.lower()
+        closed = []
+        for t in targets:
+            if t.get("type") != "page":
+                continue
+            if needle in (t.get("url") or "").lower():
+                conn.send("Target.closeTarget", {"targetId": t["targetId"]})
+                closed.append(t["targetId"][:8])
+        return {
+            "status": "ok",
+            "action": "close_tab",
+            "substring": args.substring,
+            "closed": closed,
+            "remaining_pages": sum(
+                1 for t in targets
+                if t.get("type") == "page" and needle not in (t.get("url") or "").lower()
+            ),
+        }
+    except Exception as e:  # noqa: BLE001
+        return {"status": "error", "action": "close_tab", "error": str(e)}
+    finally:
+        conn.detach()
 
 
 def cmd_a11y(page: Page, args) -> dict:
@@ -784,8 +812,12 @@ def main():
     p_file.add_argument("file_path", help="Absolute path to file on disk")
 
     # new_page
-    p_new = sub.add_parser("new_page", help="Open a new page")
+    p_new = sub.add_parser("new_page", help="Open a durable tab (survives this process)")
     p_new.add_argument("url", nargs="?", default="about:blank", help="URL to open")
+
+    # close_tab
+    p_close = sub.add_parser("close_tab", help="Close open tabs whose URL contains SUBSTR")
+    p_close.add_argument("substring", help="URL substring to match")
 
     # a11y
     p_a11y = sub.add_parser("a11y", help="Numbered interactive-element snapshot")
@@ -833,6 +865,7 @@ def main():
             "screenshot": cmd_screenshot,
             "list_pages": cmd_list_pages,
             "new_page": cmd_new_page,
+            "close_tab": cmd_close_tab,
             "set_input_files": cmd_set_input_files,
             "a11y": cmd_a11y,
             "a11y_click": cmd_a11y_click,
@@ -851,17 +884,6 @@ def main():
         sys.exit(1)
     finally:
         if pw:
-            # Reclaim every page this process created except the persistent
-            # session tab so the container's tab count stays bounded across
-            # repeated CLI invocations.
-            for p in list(_created_pages):
-                if _is_session_page(p):
-                    continue
-                try:
-                    p.close()
-                except Exception:  # noqa: BLE001
-                    pass
-            _created_pages.clear()
             pw.stop()
 
 
