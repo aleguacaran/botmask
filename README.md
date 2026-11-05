@@ -103,12 +103,17 @@ Two rules for consumers:
 - Same-container consumers (agent and browser in one container) just use
   `127.0.0.1:9223` — or `127.0.0.1:9222` directly, no relay needed.
 
-Env knob `BOTMASK_CDP_RELAY_PORT`:
-- `auto` (default) — relay only inside containers, where the loopback-only bind
-  blocks cross-container access. On bare metal the consumer reaches
-  `127.0.0.1:9222` directly and socat may not even be installed, so it is skipped.
-- `<port>` — force the relay on that port, in any environment.
-- `off` — never relay.
+TOML keys (in `botmask.toml`):
+- `cdp_port = 9222` — Brave's debug port (loopback-only, always).
+- `cdp_relay_port` — `"auto"` (default): relay only inside containers, where the
+  loopback-only bind blocks cross-container access. On bare metal the consumer
+  reaches `127.0.0.1:9222` directly and socat may not even be installed, so it
+  is skipped. A number forces the relay on that port; `"off"` never relays.
+- `args = [...]` — Brave launch arguments (falls back to a built-in
+  anti-detection set plus ozone auto-detect when absent).
+
+`DISPLAY` / `WAYLAND_DISPLAY` remain environment-driven: they are host-injected
+values, not project config.
 
 ## Migration guide
 

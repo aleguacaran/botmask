@@ -121,8 +121,15 @@ def test_pace():
     assert 0.05 < elapsed < 1.0, f"delay was {elapsed:.2f}s"
     print(f"    Pace multiplier: {sim.pace_multiplier}")
 
+# Deterministic local page — external sites (example.com) change their DOM
+# without notice, which silently breaks the interaction checks below.
+TEST_PAGE = (
+    "data:text/html,<h1>botmask test</h1><button id='b'>Go</button>"
+    "<div style='height:3000px'>scroll area</div>"
+)
+
 def test_mouse_move():
-    page.goto("https://example.com", wait_until="domcontentloaded", timeout=15000)
+    page.goto(TEST_PAGE, wait_until="domcontentloaded", timeout=15000)
     time.sleep(0.5)
     sim = Behavior(page)
     sim.move_mouse_to(target_x=400, target_y=300, steps=30)

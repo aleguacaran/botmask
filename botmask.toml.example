@@ -30,6 +30,13 @@ implicit_wait = 10
 delay_min = 3.0
 delay_max = 8.0
 
+# CDP port Brave listens on (loopback only — see README for the relay)
+cdp_port = 9222
+
+# CDP relay for cross-container consumers: "auto" (only inside containers),
+# a port number to force it on, or "off" to never relay
+cdp_relay_port = "auto"
+
 # Additional Chromium/Brave arguments (list)
 # Default anti-detection args (always included unless overridden):
 # NOTE: --ozone-platform is auto-detected from WAYLAND_DISPLAY env var

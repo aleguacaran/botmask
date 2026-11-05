@@ -15,7 +15,6 @@ Usage:
 import os
 import sys
 import random
-import shlex
 import tomllib  # stdlib (Python 3.11+); falls back gracefully
 from pathlib import Path
 from typing import Optional
@@ -96,6 +95,10 @@ def get_browser_config() -> dict:
     else:
         merged = {}
 
+    # Accept the friendlier TOML spelling used by botmask.toml.example.
+    if "executable" in merged and "executable_path" not in merged:
+        merged["executable_path"] = merged.pop("executable")
+
     # ---------- 2. Override display vars from the environment ----------
     # These MUST come from the host environment; never from TOML.
     merged["display"] = os.getenv("DISPLAY")
@@ -116,6 +119,8 @@ def get_browser_config() -> dict:
         "implicit_wait": 10,
         "delay_min": 1.0,
         "delay_max": 3.0,
+        "cdp_port": 9222,
+        "cdp_relay_port": "auto",
     }
     for k, v in defaults.items():
         merged.setdefault(k, v)
@@ -125,16 +130,18 @@ def get_browser_config() -> dict:
 
 def get_browser_args() -> list:
     """
-    Get browser launch arguments from BROWSER_ARGS env var.
+    Get browser launch arguments from ``botmask.toml`` (top-level ``args`` list).
 
-    Enhanced with anti-detection flags.
+    Falls back to the built-in anti-detection set (plus ozone auto-detect from
+    ``WAYLAND_DISPLAY``) when the TOML provides none.
 
     Returns:
         List of browser arguments
     """
-    args_str = get_env("BROWSER_ARGS", "")
+    config = get_browser_config()
+    args = config.get("args")
 
-    if not args_str:
+    if not args:
         args = [
             "--disable-blink-features=AutomationControlled",
             "--disable-dev-shm-usage",
@@ -153,32 +160,15 @@ def get_browser_args() -> list:
             "--window-size=1920,1080",
         ]
 
-        # Auto-detect Wayland and set ozone platform
-        wayland_display = os.getenv("WAYLAND_DISPLAY")
-        if wayland_display:
+    # Auto-detect Wayland and set ozone platform unless the TOML already
+    # pins one (an explicit --ozone-platform always wins).
+    if not any(a.startswith("--ozone-platform") for a in args):
+        if os.getenv("WAYLAND_DISPLAY"):
             args.append("--ozone-platform=wayland")
         else:
             args.append("--ozone-platform=x11")
 
-        cdp_port = get_env("BROWSER_CDP_PORT", "")
-        if cdp_port:
-            cdp_host = get_env("BROWSER_CDP_HOST", "0.0.0.0")
-            args.append(f"--remote-debugging-port={cdp_port}")
-            args.append(f"--remote-debugging-address={cdp_host}")
-
-        return args
-
-    try:
-        return shlex.split(args_str)
-    except Exception as e:
-        print(f"Warning: Failed to parse BROWSER_ARGS: {e}", file=sys.stderr)
-        print(f"Using default arguments instead", file=sys.stderr)
-        return [
-            "--disable-blink-features=AutomationControlled",
-            "--disable-dev-shm-usage",
-            "--no-sandbox",
-            "--disable-setuid-sandbox",
-        ]
+    return list(args)
 
 
 def get_launch_options(persistent: bool = False) -> dict:
@@ -203,9 +193,8 @@ def get_launch_options(persistent: bool = False) -> dict:
     # Headless from the merged config (TOML > defaults)
     headless = config["headless"]
 
-    # Browser args: prefer those from the config file,
-    # otherwise fall back to reading ``BROWSER_ARGS`` env var.
-    args = config.get("browser", {}).get("args") or get_browser_args()
+    # Browser args: from the config file, else the built-in default set.
+    args = get_browser_args()
 
     return {
         "executable_path": config["executable_path"],

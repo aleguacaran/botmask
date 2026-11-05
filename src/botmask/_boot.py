@@ -73,21 +73,19 @@ def main():
     state["brave"].setdefault("stats", {})["reporting_enabled"] = False
     local_state.write_text(json.dumps(state))
 
-    cdp_port = os.getenv("BROWSER_CDP_PORT", "9222")
-    cdp_host = os.getenv("BROWSER_CDP_HOST", "0.0.0.0")
-    relay_on, relay_port = _resolve_relay(
-        os.getenv("BOTMASK_CDP_RELAY_PORT", "auto"), cdp_port
-    )
+    # All runtime settings come from botmask.toml (TOML > defaults).
+    # Only DISPLAY/WAYLAND_DISPLAY stay env-driven (host-injected values).
+    cdp_port = str(cfg["cdp_port"])
+    relay_on, relay_port = _resolve_relay(str(cfg["cdp_relay_port"]), cdp_port)
 
     cmd = [cfg["executable_path"]] + args + [
         f"--remote-debugging-port={cdp_port}",
-        f"--remote-debugging-address={cdp_host}",
         f"--user-data-dir={cfg['user_data_dir']}",
     ]
 
     proc = subprocess.Popen(cmd)
     print(f"[botmask] Brave launched (pid={proc.pid}), CDP on 127.0.0.1:{cdp_port} "
-          f"(Brave ignores --remote-debugging-address; loopback only)",
+          f"(loopback only)",
           flush=True)
 
     # Forward signals to both children so docker stop works cleanly
@@ -129,12 +127,13 @@ def main():
         except FileNotFoundError:
             print(f"[botmask] ERROR: socat not found — the CDP relay on "
                   f"{relay_port} could not start. Other containers cannot reach "
-                  f"this browser; install socat or set BOTMASK_CDP_RELAY_PORT=off.",
+                  f"this browser; install socat or set cdp_relay_port = \"off\" "
+                  f"in botmask.toml.",
                   file=sys.stderr)
     else:
-        print(f"[botmask] CDP relay skipped (BOTMASK_CDP_RELAY_PORT="
-              f"{os.getenv('BOTMASK_CDP_RELAY_PORT', 'auto')}); "
-              f"CDP reachable at 127.0.0.1:{cdp_port} from this host only.",
+        print(f"[botmask] CDP relay skipped (botmask.toml cdp_relay_port="
+              f"\"{cfg['cdp_relay_port']}\"); CDP reachable at "
+              f"127.0.0.1:{cdp_port} from this host only.",
               flush=True)
 
     try:
